@@ -6,6 +6,7 @@ use {
         solana_program::{instruction::Instruction, system_program},
         InstructionData, ToAccountMetas,
     },
+    lamports_vault::error::ErrorCode,
     litesvm::{
         types::{FailedTransactionMetadata, TransactionMetadata},
         LiteSVM,
@@ -107,6 +108,18 @@ pub fn send(
 
     let tx = VersionedTransaction::try_new(VersionedMessage::Legacy(msg), &signers).unwrap();
     svm.send_transaction(tx)
+}
+
+/// Asserts the failed transaction was rejected by `expected`, not by some other
+/// error that happens to also fail. Anchor logs the variant name on every
+/// `require!`, so the name is derived from the enum instead of hardcoded.
+pub fn assert_anchor_error(e: &FailedTransactionMetadata, expected: ErrorCode) {
+    let needle = format!("Error Code: {}", expected.name());
+    assert!(
+        e.meta.logs.iter().any(|line| line.contains(&needle)),
+        "expected `{needle}`, got logs:\n{:#?}",
+        e.meta.logs
+    );
 }
 
 pub fn initialize_vault(svm: &mut LiteSVM, payer: &Keypair) {

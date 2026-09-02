@@ -2,8 +2,9 @@ mod common;
 
 use {
     crate::common::BASE_FEE, common::{
-        ONE_SOL, build_deposit_ix, build_withdraw_ix, fund, initialize_vault, send, setup_svm, vault_pda,
-    }, solana_keypair::Keypair, solana_signer::Signer,
+        ONE_SOL, assert_anchor_error, build_deposit_ix, build_withdraw_ix, fund, initialize_vault,
+        send, setup_svm, vault_pda,
+    }, lamports_vault::error::ErrorCode, solana_keypair::Keypair, solana_signer::Signer,
 };
 
 #[test]
@@ -215,8 +216,9 @@ fn withdraw_above_limit() {
     let withdraw_amount = 2 * ONE_SOL + 1; // vault max withdraw at 2 SOL in initialize_vault
 
     let ix = build_withdraw_ix(&payer.pubkey(), withdraw_amount);
-    let _ = send(&mut svm, &payer, &[ix.clone()], &[])
-        .expect_err("Amount exceeds the max");
+    let e = send(&mut svm, &payer, &[ix.clone()], &[])
+        .expect_err("withdraw above the limit must fail");
+    assert_anchor_error(&e, ErrorCode::ExceedsMaxWithdraw);
 
     let balance_after: u64 = svm.get_balance(&payer.pubkey()).expect("Expect to have a balance");
     let (payer_vault, _) = vault_pda(&payer.pubkey());
