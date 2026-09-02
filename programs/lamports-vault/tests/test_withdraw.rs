@@ -1,12 +1,9 @@
 mod common;
 
 use {
-    common::{
-        build_deposit_ix, build_withdraw_ix, fund, initialize_vault, send, setup_svm, vault_pda,
-        ONE_SOL,
-    },
-    solana_keypair::Keypair,
-    solana_signer::Signer,
+    crate::common::BASE_FEE, common::{
+        ONE_SOL, build_deposit_ix, build_withdraw_ix, fund, initialize_vault, send, setup_svm, vault_pda,
+    }, solana_keypair::Keypair, solana_signer::Signer,
 };
 
 #[test]
@@ -129,4 +126,103 @@ fn withdraw_with_wrong_user_fails() {
         res.is_err(),
         "an attacker without an initialized vault must not be able to withdraw"
     );
+}
+
+#[test]
+fn withdraw_under_limit() {
+    let mut svm = setup_svm();
+    let payer = Keypair::new();
+    fund(&mut svm, &payer.pubkey(), 10 * ONE_SOL);
+
+    initialize_vault(&mut svm, &payer);
+    send(
+        &mut svm,
+        &payer,
+        &[build_deposit_ix(&payer.pubkey(), 2 * ONE_SOL)],
+        &[],
+    )
+    .expect("payer deposit should succeed");
+
+    let balance_before: u64 = svm.get_balance(&payer.pubkey()).expect("Expect to have a balance");
+    let withdraw_amount = ONE_SOL;
+
+    let ix = build_withdraw_ix(&payer.pubkey(), withdraw_amount);
+    let _ = send(&mut svm, &payer, &[ix.clone()], &[]);
+
+    let balance_after: u64 = svm.get_balance(&payer.pubkey()).expect("Expect to have a balance");
+    let (payer_vault, _) = vault_pda(&payer.pubkey());
+    
+    assert!(svm.get_account(&payer_vault).is_some());
+
+    assert_eq!(
+        balance_after - balance_before,
+        withdraw_amount - BASE_FEE,
+        "Payer should get funds back"
+    );
+    
+}
+
+#[test]
+fn withdraw_at_limit() {
+    let mut svm = setup_svm();
+    let payer = Keypair::new();
+    fund(&mut svm, &payer.pubkey(), 10 * ONE_SOL);
+
+    initialize_vault(&mut svm, &payer);
+    send(
+        &mut svm,
+        &payer,
+        &[build_deposit_ix(&payer.pubkey(), 5 * ONE_SOL)],
+        &[],
+    )
+    .expect("payer deposit should succeed");
+
+    let balance_before: u64 = svm.get_balance(&payer.pubkey()).expect("Expect to have a balance");
+    let withdraw_amount = 2 * ONE_SOL; // vault max withdraw at 2 SOL in initialize_vault
+
+    let ix = build_withdraw_ix(&payer.pubkey(), withdraw_amount);
+    let _ = send(&mut svm, &payer, &[ix.clone()], &[]);
+
+    let balance_after: u64 = svm.get_balance(&payer.pubkey()).expect("Expect to have a balance");
+    let (payer_vault, _) = vault_pda(&payer.pubkey());
+    
+    assert!(svm.get_account(&payer_vault).is_some());
+
+    assert_eq!(
+        balance_after - balance_before,
+        withdraw_amount - BASE_FEE,
+        "Payer should get funds back"
+    );
+    
+}
+
+#[test]
+fn withdraw_above_limit() {
+    let mut svm = setup_svm();
+    let payer = Keypair::new();
+    fund(&mut svm, &payer.pubkey(), 10 * ONE_SOL);
+
+    initialize_vault(&mut svm, &payer);
+    send(
+        &mut svm,
+        &payer,
+        &[build_deposit_ix(&payer.pubkey(), 5 * ONE_SOL)],
+        &[],
+    )
+    .expect("payer deposit should succeed");
+
+    let balance_before: u64 = svm.get_balance(&payer.pubkey()).expect("Expect to have a balance");
+    let withdraw_amount = 2 * ONE_SOL + 1; // vault max withdraw at 2 SOL in initialize_vault
+
+    let ix = build_withdraw_ix(&payer.pubkey(), withdraw_amount);
+    let _ = send(&mut svm, &payer, &[ix.clone()], &[])
+        .expect_err("Amount exceeds the max");
+
+    let balance_after: u64 = svm.get_balance(&payer.pubkey()).expect("Expect to have a balance");
+    let (payer_vault, _) = vault_pda(&payer.pubkey());
+    
+    assert!(svm.get_account(&payer_vault).is_some());
+
+    assert_eq!(balance_before - BASE_FEE, balance_after, "Balances should be the same minus BASE_FEE")
+    
 }
