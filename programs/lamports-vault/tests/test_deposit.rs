@@ -14,7 +14,7 @@ fn deposit_increases_vault_balance() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, ONE_SOL);
 
     let (vault, _) = vault_pda(&user.pubkey());
     let vault_before = svm.get_balance(&vault).unwrap_or_default();
@@ -32,7 +32,7 @@ fn deposit_increases_vault_balance() {
         amount,
         "vault should grow by exactly the deposited amount"
     );
-    // User should be debited at least the amount; the difference also includes tx fees.
+
     assert!(
         user_before - user_after >= amount,
         "user should be debited at least the deposit amount"
@@ -45,13 +45,14 @@ fn multiple_deposits_accumulate() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, ONE_SOL);
 
     let (vault, _) = vault_pda(&user.pubkey());
     let vault_before = svm.get_balance(&vault).unwrap_or_default();
 
     let deposits = [ONE_SOL / 2, ONE_SOL, ONE_SOL / 4];
     let mut total = 0u64;
+
     for amount in deposits {
         let ix = build_deposit_ix(&user.pubkey(), amount);
         send(&mut svm, &user, &[ix], &[]).expect("deposit should succeed");
@@ -59,6 +60,7 @@ fn multiple_deposits_accumulate() {
     }
 
     let vault_after = svm.get_balance(&vault).unwrap_or_default();
+
     assert_eq!(
         vault_after - vault_before,
         total,
@@ -72,9 +74,9 @@ fn deposit_without_initialize_fails() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    // No initialize_vault call: vault_state PDA does not exist yet.
     let ix = build_deposit_ix(&user.pubkey(), ONE_SOL);
     let res = send(&mut svm, &user, &[ix], &[]);
+
     assert!(
         res.is_err(),
         "deposit without prior initialize must fail because vault_state does not exist"
@@ -87,11 +89,11 @@ fn deposit_more_than_balance_fails() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 2 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, ONE_SOL);
 
-    // Try to deposit way more than the user has.
     let ix = build_deposit_ix(&user.pubkey(), 100 * ONE_SOL);
     let res = send(&mut svm, &user, &[ix], &[]);
+
     assert!(
         res.is_err(),
         "deposit larger than the user's balance must fail"
@@ -104,14 +106,20 @@ fn deposit_zero_lamports_succeeds_and_is_a_noop() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, ONE_SOL);
 
     let (vault, _) = vault_pda(&user.pubkey());
     let vault_before = svm.get_balance(&vault).unwrap_or_default();
 
     let ix = build_deposit_ix(&user.pubkey(), 0);
-    send(&mut svm, &user, &[ix], &[]).expect("zero-lamport deposit should succeed");
+    send(&mut svm, &user, &[ix], &[])
+        .expect("zero-lamport deposit should succeed");
 
     let vault_after = svm.get_balance(&vault).unwrap_or_default();
-    assert_eq!(vault_after, vault_before, "vault balance should be unchanged");
+
+    assert_eq!(
+        vault_after,
+        vault_before,
+        "vault balance should be unchanged"
+    );
 }

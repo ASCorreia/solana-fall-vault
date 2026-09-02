@@ -15,7 +15,7 @@ fn withdraw_returns_lamports_to_user() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, 2 * ONE_SOL);
 
     // Deposit first so the vault has withdrawable lamports.
     let deposit_amount = 3 * ONE_SOL;
@@ -48,11 +48,12 @@ fn withdraw_returns_lamports_to_user() {
         withdraw_amount,
         "vault should shrink by exactly the withdrawn amount"
     );
-    // User credit equals the withdrawn amount minus the transaction fee.
+
     assert!(
         user_after > user_before,
         "user balance should increase after withdraw"
     );
+
     assert!(
         user_after - user_before <= withdraw_amount,
         "user net gain cannot exceed the withdrawn amount (fees)"
@@ -65,15 +66,15 @@ fn withdraw_more_than_vault_holds_fails() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, 100 * ONE_SOL);
 
-    // Try to withdraw far more than what the vault was seeded with at init.
     let res = send(
         &mut svm,
         &user,
         &[build_withdraw_ix(&user.pubkey(), 100 * ONE_SOL)],
         &[],
     );
+
     assert!(
         res.is_err(),
         "withdrawing more than the vault holds must fail"
@@ -92,6 +93,7 @@ fn withdraw_without_initialize_fails() {
         &[build_withdraw_ix(&user.pubkey(), ONE_SOL)],
         &[],
     );
+
     assert!(
         res.is_err(),
         "withdraw without prior initialize must fail because vault_state does not exist"
@@ -103,10 +105,12 @@ fn withdraw_with_wrong_user_fails() {
     let mut svm = setup_svm();
     let owner = Keypair::new();
     let attacker = Keypair::new();
+
     fund(&mut svm, &owner.pubkey(), 10 * ONE_SOL);
     fund(&mut svm, &attacker.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &owner);
+    initialize_vault(&mut svm, &owner, 2 * ONE_SOL);
+
     send(
         &mut svm,
         &owner,
@@ -115,18 +119,75 @@ fn withdraw_with_wrong_user_fails() {
     )
     .expect("owner deposit should succeed");
 
-    // The attacker tries to withdraw from the owner's vault by signing with
-    // their own keypair. Because the vault PDA is derived from the user's key,
-    // an attacker-built `withdraw` instruction targets a non-existent PDA and
-    // therefore cannot drain the owner's vault.
     let res = send(
         &mut svm,
         &attacker,
         &[build_withdraw_ix(&attacker.pubkey(), ONE_SOL)],
         &[],
     );
+
     assert!(
         res.is_err(),
         "an attacker without an initialized vault must not be able to withdraw"
+    );
+}
+
+#[test]
+fn withdraw_exactly_at_limit_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    let max_withdraw = ONE_SOL;
+    initialize_vault(&mut svm, &user, max_withdraw);
+
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 2 * ONE_SOL)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    let result = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), ONE_SOL)],
+        &[],
+    );
+
+    assert!(
+        result.is_ok(),
+        "withdrawing exactly the maximum must succeed"
+    );
+}
+
+#[test]
+fn withdraw_over_limit_fails() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    let max_withdraw = ONE_SOL;
+    initialize_vault(&mut svm, &user, max_withdraw);
+
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 2 * ONE_SOL)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    let result = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), 2 * ONE_SOL)],
+        &[],
+    );
+
+    assert!(
+        result.is_err(),
+        "withdrawing more than the maximum must fail"
     );
 }
