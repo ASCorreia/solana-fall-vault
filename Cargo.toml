@@ -1,0 +1,11 @@
+[workspace]
+members = [
+    "programs/hello_solana"
+]
+resolver = "2"
+
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1
+

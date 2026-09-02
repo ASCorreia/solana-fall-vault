@@ -1,0 +1,19 @@
+[package]
+name = "hello_solana"
+version = "0.1.0"
+description = "Created with Anchor"
+edition = "2021"
+
+[lib]
+name = "hello_solana"
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+anchor-lang = "0.32.1"
+indexmap = "=2.1.0"
+toml_datetime = "=0.6.5"
+zeroize = "=1.7.0"
+unicode-segmentation = "=1.11.0"
+
+[features]
+idl-build = ["anchor-lang/idl-build"]
