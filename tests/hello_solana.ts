@@ -10,7 +10,19 @@ describe("hello_solana", () => {
 
   it("Is initialized!", async () => {
     // Add your test here.
-    const tx = await program.methods.initialize().rpc();
+    const vault = anchor.web3.Keypair.generate();
+    const maxWithdraw = new anchor.BN(100);
+    
+    const tx = await program.methods
+      .initialize(maxWithdraw)
+      .accounts({
+        vault: vault.publicKey,
+        user: program.provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([vault])
+      .rpc();
+      
     console.log("Your transaction signature", tx);
   });
 });
