@@ -9,14 +9,14 @@ pub use constants::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("9AvGuh5C8cYcYU7RwwWQU9iDFqWpjQ9MnGZ8cfbkJPLc");
+declare_id!("HeVPwt9Swc5zNJEeF5TRMKfV4GtBibSu7RL5Xdjhp7Gb");
 
 #[program]
 pub mod lamports_vault {
     use super::*;
 
-    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        initialize::initialize_vault(ctx)
+    pub fn initialize(ctx: Context<Initialize>, max_withdrawal: u64) -> Result<()> {
+        initialize::initialize_vault(ctx, max_withdrawal)
     }
 
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
