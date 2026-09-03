@@ -189,7 +189,9 @@ fn withdraw_greater_fails() {
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
     let max_withdrawal = 2 * ONE_SOL;
+
     initialize_vault(&mut svm, &user, max_withdrawal);
+
     send(
         &mut svm,
         &user,
@@ -204,13 +206,15 @@ fn withdraw_greater_fails() {
         &[build_withdraw_ix(&user.pubkey(), max_withdrawal + 1)],
         &[],
     );
+
     let failure = res.expect_err("withdraw one lamport over the maximum must fail");
+
     assert!(
         failure
             .meta
             .logs
             .iter()
-            .any(|log| log.contains("Withdrawal amount exceeds the maximum allowed limit.")),
+            .any(|log| log.contains("WithdrawalLimitExceedError")),
         "failure logs should identify the withdrawal limit error: {:?}",
         failure.meta.logs
     );

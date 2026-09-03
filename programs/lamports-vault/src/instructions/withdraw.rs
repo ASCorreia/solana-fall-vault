@@ -24,7 +24,7 @@ pub struct Withdraw<'info> {
 pub fn withdraw_lamports(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     require!(
         amount <= ctx.accounts.vault_state.max_withdrawal,
-        ErrorCode::WithdrawlLimitExceedError
+        ErrorCode::WithdrawalLimitExceedError
     );
 
     msg!("Withdrawing lamports from vault");
