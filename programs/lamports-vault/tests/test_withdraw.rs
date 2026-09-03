@@ -15,7 +15,7 @@ fn withdraw_returns_lamports_to_user() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, 10 * ONE_SOL);
 
     // Deposit first so the vault has withdrawable lamports.
     let deposit_amount = 3 * ONE_SOL;
@@ -65,7 +65,7 @@ fn withdraw_more_than_vault_holds_fails() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, 100 * ONE_SOL);
 
     // Try to withdraw far more than what the vault was seeded with at init.
     let res = send(
@@ -106,7 +106,7 @@ fn withdraw_with_wrong_user_fails() {
     fund(&mut svm, &owner.pubkey(), 10 * ONE_SOL);
     fund(&mut svm, &attacker.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &owner);
+    initialize_vault(&mut svm, &owner, 10 * ONE_SOL);
     send(
         &mut svm,
         &owner,
@@ -128,5 +128,127 @@ fn withdraw_with_wrong_user_fails() {
     assert!(
         res.is_err(),
         "an attacker without an initialized vault must not be able to withdraw"
+    );
+}
+
+#[test]
+fn withdraw_under_the_cap_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    let max_withdraw = 2 * ONE_SOL;
+    initialize_vault(&mut svm, &user, max_withdraw);
+
+    // Fund the vault well above the cap so the cap is the only binding constraint.
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 5 * ONE_SOL)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    let (vault, _) = vault_pda(&user.pubkey());
+    let vault_before = svm.get_balance(&vault).unwrap_or_default();
+
+    let withdraw_amount = ONE_SOL;
+    send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), withdraw_amount)],
+        &[],
+    )
+    .expect("withdraw under the cap should succeed");
+
+    let vault_after = svm.get_balance(&vault).unwrap_or_default();
+    assert_eq!(
+        vault_before - vault_after,
+        withdraw_amount,
+        "vault should shrink by exactly the withdrawn amount"
+    );
+}
+
+#[test]
+fn withdraw_exactly_at_the_cap_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    let max_withdraw = 2 * ONE_SOL;
+    initialize_vault(&mut svm, &user, max_withdraw);
+
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 5 * ONE_SOL)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    let (vault, _) = vault_pda(&user.pubkey());
+    let vault_before = svm.get_balance(&vault).unwrap_or_default();
+
+    // The boundary: `require!(amount <= max_withdraw)` must admit equality.
+    send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), max_withdraw)],
+        &[],
+    )
+    .expect("withdraw of exactly max_withdraw should succeed");
+
+    let vault_after = svm.get_balance(&vault).unwrap_or_default();
+    assert_eq!(
+        vault_before - vault_after,
+        max_withdraw,
+        "vault should shrink by exactly max_withdraw"
+    );
+}
+
+#[test]
+fn withdraw_one_lamport_over_the_cap_fails() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    let max_withdraw = 2 * ONE_SOL;
+    initialize_vault(&mut svm, &user, max_withdraw);
+
+    // The vault holds far more than max_withdraw + 1, so an insufficient-funds
+    // failure cannot be mistaken for a cap failure.
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 5 * ONE_SOL)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    let (vault, _) = vault_pda(&user.pubkey());
+    let vault_before = svm.get_balance(&vault).unwrap_or_default();
+
+    let failed = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), max_withdraw + 1)],
+        &[],
+    )
+    .expect_err("withdraw of max_withdraw + 1 must fail");
+
+    assert!(
+        failed
+            .meta
+            .logs
+            .iter()
+            .any(|line| line.contains("ExceedsMaxWithdraw")),
+        "failure must come from the cap check, not something else; logs were: {:#?}",
+        failed.meta.logs
+    );
+
+    let vault_after = svm.get_balance(&vault).unwrap_or_default();
+    assert_eq!(
+        vault_after, vault_before,
+        "a rejected withdraw must leave the vault untouched"
     );
 }
