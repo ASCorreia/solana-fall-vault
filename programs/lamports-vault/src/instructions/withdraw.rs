@@ -23,8 +23,6 @@ pub struct Withdraw<'info> {
 
 pub fn withdraw_lamports(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
   
-    msg!("max_withdraw in state: {}", ctx.accounts.vault_state.max_withdraw);
-    msg!("amount requested: {}", amount);
     require!(
         amount <= ctx.accounts.vault_state.max_withdraw, 
         ErrorCode::ExceedsMaxWithdraw
