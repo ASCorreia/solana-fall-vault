@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::{VAULT_SEED, VAULT_STATE_SEED, VaultState};
+use crate::{VaultState, VAULT_SEED, VAULT_STATE_SEED};
 
 #[derive(Accounts)]
 pub struct Deposit<'info> {
