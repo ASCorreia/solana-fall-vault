@@ -7,16 +7,16 @@ pub struct Close<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
     #[account(
-        mut, 
-        seeds = [VAULT_SEED, user.key().as_ref()], 
-        bump
+        mut,
+        seeds = [VAULT_SEED, user.key().as_ref()],
+        bump = vault_state.vault_bump
     )]
     pub vault: SystemAccount<'info>,
     #[account(
         mut,
-        close = user, 
-        seeds = [VAULT_STATE_SEED, user.key().as_ref()], 
-        bump
+        close = user,
+        seeds = [VAULT_STATE_SEED, user.key().as_ref()],
+        bump = vault_state.bump
     )]
     pub vault_state: Account<'info, VaultState>,
     pub system_program: Program<'info, System>,
