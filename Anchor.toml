@@ -1,12 +1,15 @@
 [toolchain]
 package_manager = "yarn"
 
+[surfpool]
+rpc_port = 8989
+
 [features]
 resolution = true
 skip-lint = false
 
 [programs.localnet]
-lamports_vault = "9AvGuh5C8cYcYU7RwwWQU9iDFqWpjQ9MnGZ8cfbkJPLc"
+lamports_vault = "6zpr8bbEiczii2XZykBF9aNKdTnQWfiCRxqfx6M8Frru"
 
 [provider]
 cluster = "localnet"
