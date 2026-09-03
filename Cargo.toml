@@ -4,6 +4,9 @@ members = [
 ]
 resolver = "2"
 
+[workspace.metadata.cli]
+solana = "3.0.1"
+
 [profile.release]
 overflow-checks = true
 lto = "fat"
