@@ -4213,3 +4213,8 @@ name = "zmij"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
+
+[[patch.unused]]
+name = "toml_datetime"
+version = "0.6.8"
+source = "git+https://github.com/toml-rs/toml?rev=toml_datetime-v0.6.8#eb16379c179650a0d8cf5f42bb2987124b57b0f7"
