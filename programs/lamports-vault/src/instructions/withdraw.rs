@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::{VAULT_SEED, VAULT_STATE_SEED, VaultState};
+use crate::{error::ErrorCode, VAULT_SEED, VAULT_STATE_SEED, VaultState};
 
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
@@ -23,6 +23,14 @@ pub struct Withdraw<'info> {
 
 pub fn withdraw_lamports(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     msg!("Withdrawing lamports from vault");
+
+    // Enforce the per-transaction ceiling stored at initialize time.
+    // Withdrawing exactly the limit is allowed; anything above it is rejected.
+    require!(
+        amount <= ctx.accounts.vault_state.max_withdraw,
+        ErrorCode::ExceedsMaxWithdraw
+    );
+
     let cpi_accounts = anchor_lang::system_program::Transfer {
         from: ctx.accounts.vault.to_account_info(),
         to: ctx.accounts.user.to_account_info(),
