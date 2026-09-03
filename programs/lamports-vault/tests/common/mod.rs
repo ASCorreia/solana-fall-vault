@@ -91,6 +91,23 @@ pub fn build_withdraw_ix(user: &Pubkey, amount: u64) -> Instruction {
     )
 }
 
+pub fn build_close_ix(user: &Pubkey) -> Instruction {
+    let (vault_state, _) = vault_state_pda(user);
+    let (vault, _) = vault_pda(user);
+
+    Instruction::new_with_bytes(
+        lamports_vault::id(),
+        &lamports_vault::instruction::Close {}.data(),
+        lamports_vault::accounts::Close {
+            user: *user,
+            vault,
+            vault_state,
+            system_program: system_program::ID,
+        }
+        .to_account_metas(None),
+    )
+}
+
 pub fn send(
     svm: &mut LiteSVM,
     payer: &Keypair,
