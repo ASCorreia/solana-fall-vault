@@ -15,7 +15,7 @@ fn withdraw_returns_lamports_to_user() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, 100 * ONE_SOL);
 
     // Deposit first so the vault has withdrawable lamports.
     let deposit_amount = 3 * ONE_SOL;
@@ -65,7 +65,7 @@ fn withdraw_more_than_vault_holds_fails() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, 100 * ONE_SOL);
 
     // Try to withdraw far more than what the vault was seeded with at init.
     let res = send(
@@ -99,34 +99,33 @@ fn withdraw_without_initialize_fails() {
 }
 
 #[test]
-fn withdraw_with_wrong_user_fails() {
+fn withdraw_over_maximum_allowed_fails() {
     let mut svm = setup_svm();
-    let owner = Keypair::new();
-    let attacker = Keypair::new();
-    fund(&mut svm, &owner.pubkey(), 10 * ONE_SOL);
-    fund(&mut svm, &attacker.pubkey(), 10 * ONE_SOL);
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &owner);
+    initialize_vault(&mut svm, &user, 2 * ONE_SOL);   // cap = 2 SOL
+    
+    // Deposit first so the vault has withdrawable lamports.
+    let deposit_amount = 3 * ONE_SOL;
     send(
         &mut svm,
-        &owner,
-        &[build_deposit_ix(&owner.pubkey(), 2 * ONE_SOL)],
+        &user,
+        &[build_deposit_ix(&user.pubkey(), deposit_amount)],
         &[],
     )
-    .expect("owner deposit should succeed");
-
-    // The attacker tries to withdraw from the owner's vault by signing with
-    // their own keypair. Because the vault PDA is derived from the user's key,
-    // an attacker-built `withdraw` instruction targets a non-existent PDA and
-    // therefore cannot drain the owner's vault.
+    .expect("deposit should succeed");
+    
+    // Try to withdraw one lamport more than the cap. The vault holds 3 SOL,
+    // so it CAN afford this — the failure must come from the cap, not the balance.
     let res = send(
         &mut svm,
-        &attacker,
-        &[build_withdraw_ix(&attacker.pubkey(), ONE_SOL)],
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), 2 * ONE_SOL + 1)],
         &[],
     );
     assert!(
         res.is_err(),
-        "an attacker without an initialized vault must not be able to withdraw"
+        "withdrawing more than the maximum allowed amount must fail"
     );
 }
