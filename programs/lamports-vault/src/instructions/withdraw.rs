@@ -25,7 +25,8 @@ pub struct Withdraw<'info> {
 pub fn withdraw_lamports(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     msg!("Withdrawing lamports from vault");
     // First, Check the maximum withdraw limit. It should not be exceeded.
-    require!(amount <= ctx.accounts.vault_state.max_withdraw, ErrorCode::InvalidWithdrawLimitError);
+    // Withdrawal amount should be greater than zero.
+    require!(amount > 0 && amount <= ctx.accounts.vault_state.max_withdraw, ErrorCode::InvalidWithdrawLimitError);
 
     let cpi_accounts = anchor_lang::system_program::Transfer {
         from: ctx.accounts.vault.to_account_info(),
