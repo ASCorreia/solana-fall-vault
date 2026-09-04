@@ -9,7 +9,7 @@ pub use constants::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("fGzXJiBgmnLQZAZL7QTKT86R8f86FawLSqZigJnzLXo");
+declare_id!("9AvGuh5C8cYcYU7RwwWQU9iDFqWpjQ9MnGZ8cfbkJPLc");
 
 #[program]
 pub mod lamports_vault {
