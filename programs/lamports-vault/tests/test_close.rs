@@ -32,24 +32,12 @@ fn close_vault() {
     let state_len = VaultState::DISCRIMINATOR.len() + VaultState::INIT_SPACE;
     let state_rent = svm.minimum_balance_for_rent_exemption(state_len);
 
-    let vault_rent = svm.minimum_balance_for_rent_exemption(0);
-
-    println!(
-        "BEFORE user: {}, vault: {}, vault_rent: {}",
-        user_before, vault_before, vault_rent
-    );
-
     let ix = build_close_ix(&user.pubkey());
     send(&mut svm, &user, &[ix], &[]).expect("close should succeed");
 
     let vault_after = svm.get_balance(&vault).unwrap_or_default();
     let user_after = svm.get_balance(&user.pubkey()).unwrap_or_default();
     let vault_state_after = svm.get_balance(&vault_state).unwrap_or_default();
-
-    println!(
-        "AFTER user: {}, vault: {}, {}",
-        user_after, vault_after, vault_rent
-    );
 
     assert_eq!(
         vault_state_before, state_rent,

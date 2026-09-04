@@ -60,10 +60,92 @@ fn withdraw_returns_lamports_to_user() {
 }
 
 #[test]
-fn withdraw_more_than_vault_holds_fails() {
+fn withdraw_returns_lamports_to_user_when_amount_equals_max_withdraw() {
     let mut svm = setup_svm();
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    initialize_vault(&mut svm, &user);
+
+    // Deposit first so the vault has withdrawable lamports.
+    let deposit_amount = 3 * ONE_SOL;
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), deposit_amount)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    let (vault, _) = vault_pda(&user.pubkey());
+    let vault_before = svm.get_balance(&vault).unwrap_or_default();
+    let user_before = svm.get_balance(&user.pubkey()).unwrap_or_default();
+
+    let withdraw_amount = 2 * ONE_SOL;
+    send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), withdraw_amount)],
+        &[],
+    )
+    .expect("withdraw should succeed");
+
+    let vault_after = svm.get_balance(&vault).unwrap_or_default();
+    let user_after = svm.get_balance(&user.pubkey()).unwrap_or_default();
+
+    assert_eq!(
+        vault_before - vault_after,
+        withdraw_amount,
+        "vault should shrink by exactly the withdrawn amount"
+    );
+    // User credit equals the withdrawn amount minus the transaction fee.
+    assert!(
+        user_after > user_before,
+        "user balance should increase after withdraw"
+    );
+    assert!(
+        user_after - user_before <= withdraw_amount,
+        "user net gain cannot exceed the withdrawn amount (fees)"
+    );
+}
+
+#[test]
+fn withdraw_fails_when_amount_greater_than_max_withdraw() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    initialize_vault(&mut svm, &user);
+
+    // Deposit first so the vault has withdrawable lamports.
+    let deposit_amount = 4 * ONE_SOL;
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), deposit_amount)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    let withdraw_amount = 3 * ONE_SOL;
+    let res = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), withdraw_amount)],
+        &[],
+    );
+
+    assert!(
+        res.is_err(),
+        "withdrawing more than the allowed max_withdraw amoun"
+    );
+}
+
+#[test]
+fn withdraw_more_than_vault_holds_fails() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 1 * ONE_SOL);
 
     initialize_vault(&mut svm, &user);
 
@@ -71,7 +153,7 @@ fn withdraw_more_than_vault_holds_fails() {
     let res = send(
         &mut svm,
         &user,
-        &[build_withdraw_ix(&user.pubkey(), 100 * ONE_SOL)],
+        &[build_withdraw_ix(&user.pubkey(), 1 * ONE_SOL)],
         &[],
     );
     assert!(
