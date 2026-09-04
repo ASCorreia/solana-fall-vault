@@ -1,27 +1,35 @@
 use anchor_lang::prelude::*;
 
-use crate::{VAULT_SEED, VAULT_STATE_SEED, VaultState};
+use crate::{VAULT_SEED, VAULT_STATE_SEED, VaultState, error::ErrorCode};
 
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
+     // an account for the user 
      #[account(mut)]
     pub user: Signer<'info>,
+
+    // an account for the vault
     #[account(
         mut, 
         seeds = [VAULT_SEED, user.key().as_ref()], 
         bump = vault_state.vault_bump
     )]
     pub vault: SystemAccount<'info>,
+
+    // an account for the vault's config
     #[account(
         seeds = [VAULT_STATE_SEED, user.key().as_ref()], 
         bump = vault_state.bump
     )]
     pub vault_state: Account<'info, VaultState>,
-    pub system_program: Program<'info, System>,
 
+    // the progrm
+    pub system_program: Program<'info, System>,
 }
 
 pub fn withdraw_lamports(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
+    require!(amount <= ctx.accounts.vault_state.max_withdraw, ErrorCode::ExceedsMaxWithdraw);
+
     msg!("Withdrawing lamports from vault");
     let cpi_accounts = anchor_lang::system_program::Transfer {
         from: ctx.accounts.vault.to_account_info(),

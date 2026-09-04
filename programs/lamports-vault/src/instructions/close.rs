@@ -25,11 +25,14 @@ pub struct Close<'info> {
 pub fn close_vault(ctx: Context<Close>) -> Result<()> {
      msg!("Closing vault for user: {}", ctx.accounts.user.key());
 
+    // transfer all the $$$ from the user's PDA vault into the user's wallet?
     let cpi_accounts = anchor_lang::system_program::Transfer {
         from: ctx.accounts.vault.to_account_info(),
         to: ctx.accounts.user.to_account_info(),
     };
 
+    // get the building blocks to get the PDA for the user so that transfer
+    // knows how to sign
     let signer_seeds = &[
         VAULT_SEED,
         &ctx.accounts.user.key().to_bytes(),
