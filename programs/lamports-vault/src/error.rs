@@ -1,12 +1,6 @@
 use anchor_lang::prelude::*;
 
 #[error_code]
-pub enum ErrorCode {
-    #[msg("Custom error message")]
-    CustomError,
-}
-
-#[error_code]
 pub enum VaultError {
     #[msg("Insufficient funds in the vault to withdraw requested amount.")]
     InsufficientFunds,
