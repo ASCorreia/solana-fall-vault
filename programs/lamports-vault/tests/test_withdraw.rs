@@ -130,3 +130,90 @@ fn withdraw_with_wrong_user_fails() {
         "an attacker without an initialized vault must not be able to withdraw"
     );
 }
+
+
+// THE THREE TESTS 
+#[test]
+fn withdraw_under_limit_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    initialize_vault(&mut svm, &user);
+
+    let deposit_amount = 3 * ONE_SOL;
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), deposit_amount)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    // Under the 1 SOL cap.
+    let withdraw_amount = ONE_SOL / 2;
+    let res = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), withdraw_amount)],
+        &[],
+    );
+
+    assert!(res.is_ok(), "withdrawal under the cap should succeed");
+}
+
+#[test]
+fn withdraw_exactly_at_limit_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    initialize_vault(&mut svm, &user);
+
+    let deposit_amount = 3 * ONE_SOL;
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), deposit_amount)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    // Exactly at the 1 SOL cap must be allowed (<=, not <).
+    let res = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), ONE_SOL)],
+        &[],
+    );
+
+    assert!(res.is_ok(), "withdrawal exactly at the cap should succeed");
+}
+
+#[test]
+fn withdraw_over_limit_fails() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    initialize_vault(&mut svm, &user);
+
+    let deposit_amount = 3 * ONE_SOL;
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), deposit_amount)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    // One lamport over the 1 SOL cap must fail.
+    let res = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), ONE_SOL + 1)],
+        &[],
+    );
+
+    assert!(res.is_err(), "withdrawal over the cap must fail");
+}
