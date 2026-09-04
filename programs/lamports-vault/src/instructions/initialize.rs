@@ -26,21 +26,24 @@ pub struct Initialize<'info> {
 pub fn initialize_vault(ctx: Context<Initialize>) -> Result<()> {
     msg!("Initializing vault for user: {}", ctx.accounts.user.key());
 
-    let cpi_acccounts = anchor_lang::system_program::Transfer {
+    let cpi_accounts = anchor_lang::system_program::Transfer {
         from: ctx.accounts.user.to_account_info(),
         to: ctx.accounts.vault.to_account_info(),
     };
 
-    let cpi_ctx = CpiContext::new(ctx.accounts.system_program.key(), cpi_acccounts);
+    let cpi_ctx = CpiContext::new(ctx.accounts.system_program.key(), cpi_accounts);
 
+    // Seed the vault PDA so it stays rent-exempt even when its balance is
+    // fully withdrawn. The vault carries no data, so this is the rent floor
+    // for a zero-length system account.
     let rent = Rent::get()?.minimum_balance(ctx.accounts.vault.data_len());
 
     anchor_lang::system_program::transfer(cpi_ctx, rent)?;
 
     ctx.accounts.vault_state.set_inner(VaultState {
-        vault_bump: ctx.bumps.vault, 
-        bump: ctx.bumps.vault_state
+        vault_bump: ctx.bumps.vault,
+        bump: ctx.bumps.vault_state,
     });
-    
+
     Ok(())
 }

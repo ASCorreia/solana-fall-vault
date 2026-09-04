@@ -112,3 +112,20 @@ pub fn initialize_vault(svm: &mut LiteSVM, payer: &Keypair) {
     let ix = build_initialize_ix(&payer.pubkey());
     send(svm, payer, &[ix], &[]).expect("initialize should succeed");
 }
+
+pub fn build_close_ix(user: &Pubkey) -> Instruction {
+    let (vault_state, _) = vault_state_pda(user);
+    let (vault, _) = vault_pda(user);
+
+    Instruction::new_with_bytes(
+        lamports_vault::id(),
+        &lamports_vault::instruction::Close {}.data(),
+        lamports_vault::accounts::Close {
+            user: *user,
+            vault,
+            vault_state,
+            system_program: system_program::ID,
+        }
+        .to_account_metas(None),
+    )
+}
