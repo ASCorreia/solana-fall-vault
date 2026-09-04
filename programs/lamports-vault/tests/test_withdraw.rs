@@ -1,12 +1,9 @@
 mod common;
 
 use {
-    common::{
-        build_deposit_ix, build_withdraw_ix, fund, initialize_vault, send, setup_svm, vault_pda,
-        ONE_SOL,
-    },
-    solana_keypair::Keypair,
-    solana_signer::Signer,
+    crate::common::MAX_WITHDRAW, common::{
+        ONE_SOL, build_deposit_ix, build_withdraw_ix, fund, initialize_vault, send, setup_svm, vault_pda,
+    }, solana_keypair::Keypair, solana_signer::Signer,
 };
 
 #[test]
@@ -129,4 +126,49 @@ fn withdraw_with_wrong_user_fails() {
         res.is_err(),
         "an attacker without an initialized vault must not be able to withdraw"
     );
+}
+#[test]
+fn withdraw_within_valid_limit(){
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10*ONE_SOL);
+
+    initialize_vault(&mut svm, &user);
+
+    let deposit_amount = 3*ONE_SOL;
+
+    send(&mut svm, &user, &[build_deposit_ix(&user.pubkey(), deposit_amount)], &[], ). expect("vault deposit should succeed");
+   
+    send(&mut svm, &user, &[build_withdraw_ix(&user.pubkey(), ONE_SOL)], &[]).expect("withdraw should succeed");
+
+}
+#[test]
+fn withdraw_exactly_at_limit(){
+     let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10*ONE_SOL);
+
+    initialize_vault(&mut svm, &user);
+
+    let deposit_amount = 3*ONE_SOL;
+
+    send(&mut svm, &user, &[build_deposit_ix(&user.pubkey(), deposit_amount)], &[], ). expect("vault deposit should succeed");
+   
+    send(&mut svm, &user, &[build_withdraw_ix(&user.pubkey(), 3*ONE_SOL)], &[]).expect("withdraw should succeed");
+}
+#[test]
+fn withdraw_over_limit(){
+     let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10*ONE_SOL);
+
+    initialize_vault(&mut svm, &user);
+
+    let deposit_amount = 3*ONE_SOL;
+
+    send(&mut svm, &user, &[build_deposit_ix(&user.pubkey(), deposit_amount)], &[], ). expect("vault deposit should succeed");
+   
+    let result = send(&mut svm, &user, &[build_withdraw_ix(&user.pubkey(), MAX_WITHDRAW+1)], &[]);
+
+    assert!( result.is_err(),"withdrawal exceeds limit");
 }
