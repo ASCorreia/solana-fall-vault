@@ -17,7 +17,9 @@ fn initialize_creates_vault_state_and_funds_vault() {
     let (vault_state, expected_state_bump) = vault_state_pda(&payer.pubkey());
     let (vault, expected_vault_bump) = vault_pda(&payer.pubkey());
 
-    let ix = build_initialize_ix(&payer.pubkey());
+    // Max withdraw limit.
+    let max_withdraw_limit = 500 * ONE_SOL;
+    let ix = build_initialize_ix(&payer.pubkey(), max_withdraw_limit);
     send(&mut svm, &payer, &[ix], &[]).expect("initialize should succeed");
 
     let state_account = svm
@@ -29,9 +31,11 @@ fn initialize_creates_vault_state_and_funds_vault() {
     // Bytes 0..8 are the Anchor discriminator; bytes 8 and 9 hold the bumps in
     // VaultState field order: `vault_bump` (byte 8) then `bump` (byte 9).
     let data = &state_account.data;
+    let max_withdraw_from_state = u64::from_le_bytes(data[8..16].try_into().unwrap());
     assert!(data.len() >= 10, "vault_state account too small");
-    assert_eq!(data[8], expected_vault_bump, "vault_bump mismatch");
-    assert_eq!(data[9], expected_state_bump, "state_bump mismatch");
+    assert_eq!(max_withdraw_from_state, max_withdraw_limit, "max withdraw limit mismatch");
+    assert_eq!(data[16], expected_vault_bump, "vault_bump mismatch");
+    assert_eq!(data[17], expected_state_bump, "state_bump mismatch");
 
     let vault_balance = svm.get_balance(&vault).unwrap_or_default();
     assert!(
@@ -46,7 +50,9 @@ fn initialize_twice_for_same_payer_fails() {
     let payer = Keypair::new();
     fund(&mut svm, &payer.pubkey(), 10 * ONE_SOL);
 
-    let ix = build_initialize_ix(&payer.pubkey());
+    // Max withdraw limit.
+    let max_withdraw_limit = 500 * ONE_SOL;
+    let ix = build_initialize_ix(&payer.pubkey(), max_withdraw_limit);
     send(&mut svm, &payer, &[ix.clone()], &[]).expect("first initialize should succeed");
 
     // Re-initializing with the same payer reuses the same PDAs and must fail
@@ -66,9 +72,13 @@ fn initialize_with_separate_payers_creates_independent_vaults() {
     fund(&mut svm, &alice.pubkey(), 10 * ONE_SOL);
     fund(&mut svm, &bob.pubkey(), 10 * ONE_SOL);
 
-    send(&mut svm, &alice, &[build_initialize_ix(&alice.pubkey())], &[])
+    // Max withdraw limit.
+    let max_withdraw_limit = 500 * ONE_SOL;
+    send(&mut svm, &alice, &[build_initialize_ix(&alice.pubkey(), max_withdraw_limit)], &[])
         .expect("alice init should succeed");
-    send(&mut svm, &bob, &[build_initialize_ix(&bob.pubkey())], &[])
+    // Max withdraw limit.
+    let max_withdraw_limit = 800 * ONE_SOL;
+    send(&mut svm, &bob, &[build_initialize_ix(&bob.pubkey(), max_withdraw_limit)], &[])
         .expect("bob init should succeed");
 
     let (alice_vault, _) = vault_pda(&alice.pubkey());

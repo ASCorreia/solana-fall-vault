@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::{ANCHOR_DISCRIMINATOR_LENGTH, VAULT_SEED, VAULT_STATE_SEED, VaultState};
+use crate::error::ErrorCode;
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -23,8 +24,10 @@ pub struct Initialize<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn initialize_vault(ctx: Context<Initialize>) -> Result<()> {
+pub fn initialize_vault(ctx: Context<Initialize>, withdraw_limit: u64) -> Result<()> {
     msg!("Initializing vault for user: {}", ctx.accounts.user.key());
+    // First. Ensure withdraw limit is set during initialization. Limit must be greater than 0.
+    require_gt!(withdraw_limit, 0, ErrorCode::InvalidWithdrawLimitError);
 
     let cpi_acccounts = anchor_lang::system_program::Transfer {
         from: ctx.accounts.user.to_account_info(),
@@ -38,6 +41,7 @@ pub fn initialize_vault(ctx: Context<Initialize>) -> Result<()> {
     anchor_lang::system_program::transfer(cpi_ctx, rent)?;
 
     ctx.accounts.vault_state.set_inner(VaultState {
+        max_withdraw: withdraw_limit,
         vault_bump: ctx.bumps.vault, 
         bump: ctx.bumps.vault_state
     });
