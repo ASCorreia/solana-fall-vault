@@ -13,9 +13,10 @@ use {
 fn withdraw_returns_lamports_to_user() {
     let mut svm = setup_svm();
     let user = Keypair::new();
-    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+    let max_withdraw: u64 = 5 * ONE_SOL;
+    fund(&mut svm, &user.pubkey(), 100 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, max_withdraw);
 
     // Deposit first so the vault has withdrawable lamports.
     let deposit_amount = 3 * ONE_SOL;
@@ -63,17 +64,27 @@ fn withdraw_returns_lamports_to_user() {
 fn withdraw_more_than_vault_holds_fails() {
     let mut svm = setup_svm();
     let user = Keypair::new();
-    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+    let max_withdraw: u64 = 12 * ONE_SOL;
+    fund(&mut svm, &user.pubkey(), 20 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, max_withdraw);
+
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 2 * ONE_SOL)],
+        &[],
+    )
+    .expect("deposit should succeed");
 
     // Try to withdraw far more than what the vault was seeded with at init.
     let res = send(
         &mut svm,
         &user,
-        &[build_withdraw_ix(&user.pubkey(), 100 * ONE_SOL)],
+        &[build_withdraw_ix(&user.pubkey(), 5 * ONE_SOL)],
         &[],
     );
+
     assert!(
         res.is_err(),
         "withdrawing more than the vault holds must fail"
@@ -103,10 +114,14 @@ fn withdraw_with_wrong_user_fails() {
     let mut svm = setup_svm();
     let owner = Keypair::new();
     let attacker = Keypair::new();
-    fund(&mut svm, &owner.pubkey(), 10 * ONE_SOL);
-    fund(&mut svm, &attacker.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &owner);
+    // let max_withdraw_owner: u64 = 5 * ONE_SOL;
+    let max_withdraw: u64 = 7 * ONE_SOL;
+
+    fund(&mut svm, &owner.pubkey(), 15 * ONE_SOL);
+    fund(&mut svm, &attacker.pubkey(), 15 * ONE_SOL);
+
+    initialize_vault(&mut svm, &owner, max_withdraw);
     send(
         &mut svm,
         &owner,
@@ -128,5 +143,93 @@ fn withdraw_with_wrong_user_fails() {
     assert!(
         res.is_err(),
         "an attacker without an initialized vault must not be able to withdraw"
+    );
+}
+
+#[test]
+fn withdraw_under_the_limit_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    let max_withdraw: u64 = 5 * ONE_SOL;
+
+    fund(&mut svm, &user.pubkey(), 100 * ONE_SOL);
+    initialize_vault(&mut svm, &user, max_withdraw);
+
+    // fund the vault
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 10 * ONE_SOL)],
+        &[],
+    )
+    .expect("owner deposit should succeed");
+
+    // withdraw from vault
+    send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), 3 * ONE_SOL)],
+        &[],
+    )
+    .expect("withdrawal should suceed");
+}
+
+#[test]
+fn withdraw_exactly_at_the_limit_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    let max_withdraw: u64 = 5 * ONE_SOL;
+
+    fund(&mut svm, &user.pubkey(), 100 * ONE_SOL);
+    initialize_vault(&mut svm, &user, max_withdraw);
+
+    // fund the vault
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 10 * ONE_SOL)],
+        &[],
+    )
+    .expect("owner deposit should succeed");
+
+    // withdraw from vault
+    send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), 5 * ONE_SOL)],
+        &[],
+    )
+    .expect("withdrawal should suceed");
+}
+
+#[test]
+fn withdraw_over_the_limit_fails() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    let max_withdraw: u64 = 5 * ONE_SOL;
+
+    fund(&mut svm, &user.pubkey(), 100 * ONE_SOL);
+    initialize_vault(&mut svm, &user, max_withdraw);
+
+    // fund the vault
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 10 * ONE_SOL)],
+        &[],
+    )
+    .expect("owner deposit should succeed");
+
+    // withdraw from vault
+    let res = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), max_withdraw + 1)],
+        &[],
+    );
+
+    assert!(
+        res.is_err(),
+        "withdrawing max_withdraw + 1 lamport must fail"
     );
 }
