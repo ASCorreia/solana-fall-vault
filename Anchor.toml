@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-lamports_vault = "9AvGuh5C8cYcYU7RwwWQU9iDFqWpjQ9MnGZ8cfbkJPLc"
+lamports_vault = "4bvTBvdwYKyF4pBh8fqRsLTgNKTPtnnN6N3TUeHSLrt2"
 
 [provider]
 cluster = "localnet"
