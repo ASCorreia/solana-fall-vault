@@ -6,11 +6,14 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-lamports_vault = "9AvGuh5C8cYcYU7RwwWQU9iDFqWpjQ9MnGZ8cfbkJPLc"
+lamports_vault = "FhhGq5patKiMzg5b7AMF51zWDoND2d48YisBgYkbifz1"
+
+[programs.devnet]
+lamports_vault = "FhhGq5patKiMzg5b7AMF51zWDoND2d48YisBgYkbifz1"
 
 [provider]
-cluster = "localnet"
-wallet = "~/.config/solana/id.json"
+cluster = "devnet"
+wallet = "/home/samcl/.config/solana/DEV.json"
 
 [scripts]
 test = "cargo test"
