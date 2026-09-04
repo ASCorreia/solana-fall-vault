@@ -26,6 +26,7 @@ pub fn deposit_lamports(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         from: ctx.accounts.user.to_account_info(),
         to: ctx.accounts.vault.to_account_info(),
     };
+    // don't need new_with_signer here cuz the user already signed this txn 
     let cpi_ctx = CpiContext::new(ctx.accounts.system_program.key(), cpi_accounts);
     anchor_lang::system_program::transfer(cpi_ctx, amount)?;
     msg!("Deposited {} lamports to vault", amount);
