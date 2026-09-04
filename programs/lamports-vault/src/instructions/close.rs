@@ -7,32 +7,38 @@ pub struct Close<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
     #[account(
-        mut, 
-        seeds = [VAULT_SEED, user.key().as_ref()], 
-        bump
+        mut,
+        seeds = [VAULT_SEED, user.key().as_ref()],
+        bump = vault_state.vault_bump
     )]
     pub vault: SystemAccount<'info>,
     #[account(
         mut,
-        close = user, 
-        seeds = [VAULT_STATE_SEED, user.key().as_ref()], 
-        bump
+        close = user,
+        seeds = [VAULT_STATE_SEED, user.key().as_ref()],
+        bump = vault_state.bump
     )]
     pub vault_state: Account<'info, VaultState>,
     pub system_program: Program<'info, System>,
 }
 
 pub fn close_vault(ctx: Context<Close>) -> Result<()> {
-     msg!("Closing vault for user: {}", ctx.accounts.user.key());
+    msg!("Closing vault for user: {}", ctx.accounts.user.key());
+
+    // Drain the whole vault, including the rent seeded at initialize. The
+    // vault holds no data, so it is safe to empty it completely here; the
+    // `close = user` constraint reclaims the vault_state rent separately.
+    let amount = ctx.accounts.vault.lamports();
 
     let cpi_accounts = anchor_lang::system_program::Transfer {
         from: ctx.accounts.vault.to_account_info(),
         to: ctx.accounts.user.to_account_info(),
     };
 
+    let user_key = ctx.accounts.user.key();
     let signer_seeds = &[
         VAULT_SEED,
-        &ctx.accounts.user.key().to_bytes(),
+        user_key.as_ref(),
         &[ctx.accounts.vault_state.vault_bump],
     ];
     let binding = [&signer_seeds[..]];
@@ -41,8 +47,9 @@ pub fn close_vault(ctx: Context<Close>) -> Result<()> {
         cpi_accounts,
         &binding,
     );
-    anchor_lang::system_program::transfer(cpi_ctx, ctx.accounts.vault.lamports())?;
-    msg!("Vault closed successfully");
-    
+    anchor_lang::system_program::transfer(cpi_ctx, amount)?;
+
+    msg!("Vault closed successfully, returned {} lamports", amount);
+
     Ok(())
 }

@@ -1,36 +1,47 @@
 use anchor_lang::prelude::*;
 
-use crate::{VAULT_SEED, VAULT_STATE_SEED, VaultState};
+use crate::{VaultError, VAULT_SEED, VAULT_STATE_SEED, VaultState};
 
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
-     #[account(mut)]
+    #[account(mut)]
     pub user: Signer<'info>,
     #[account(
-        mut, 
-        seeds = [VAULT_SEED, user.key().as_ref()], 
+        mut,
+        seeds = [VAULT_SEED, user.key().as_ref()],
         bump = vault_state.vault_bump
     )]
     pub vault: SystemAccount<'info>,
     #[account(
-        seeds = [VAULT_STATE_SEED, user.key().as_ref()], 
+        seeds = [VAULT_STATE_SEED, user.key().as_ref()],
         bump = vault_state.bump
     )]
     pub vault_state: Account<'info, VaultState>,
     pub system_program: Program<'info, System>,
-
 }
 
 pub fn withdraw_lamports(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     msg!("Withdrawing lamports from vault");
+
+    // The vault must stay rent-exempt after the withdrawal, otherwise the
+    // runtime would reap the account and the user would lose the PDA.
+    let rent_exempt = Rent::get()?.minimum_balance(ctx.accounts.vault.data_len());
+    let available = ctx
+        .accounts
+        .vault
+        .lamports()
+        .saturating_sub(rent_exempt);
+    require!(amount <= available, VaultError::InsufficientFunds);
+
     let cpi_accounts = anchor_lang::system_program::Transfer {
         from: ctx.accounts.vault.to_account_info(),
         to: ctx.accounts.user.to_account_info(),
     };
 
+    let user_key = ctx.accounts.user.key();
     let signer_seeds = &[
         VAULT_SEED,
-        &ctx.accounts.user.key().to_bytes(),
+        user_key.as_ref(),
         &[ctx.accounts.vault_state.vault_bump],
     ];
     let binding = [&signer_seeds[..]];
@@ -40,6 +51,7 @@ pub fn withdraw_lamports(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
         &binding,
     );
     anchor_lang::system_program::transfer(cpi_ctx, amount)?;
+
     msg!("Withdrawn {} lamports from vault", amount);
 
     Ok(())
