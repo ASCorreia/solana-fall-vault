@@ -130,3 +130,81 @@ fn withdraw_with_wrong_user_fails() {
         "an attacker without an initialized vault must not be able to withdraw"
     );
 }
+
+#[test]
+fn withdraw_under_the_limit_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    let max_withdraw = 2 * ONE_SOL;
+    initialize_vault(&mut svm, &user, max_withdraw);
+
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 5 * ONE_SOL)],
+        &[],
+    )
+    .expect("user deposit should succeed");
+
+    send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), max_withdraw - 1)],
+        &[],
+    )
+    .expect("withdrawing under the limit should succeeds");
+}
+
+#[test]
+fn withdraw_exactly_at_the_limit_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    let max_withdraw = 2 * ONE_SOL;
+    initialize_vault(&mut svm, &user, max_withdraw);
+
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 5 * ONE_SOL)],
+        &[],
+    )
+    .expect("user deposit should succeed");
+
+    send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), max_withdraw)],
+        &[],
+    )
+    .expect("withdrawing exactly the limit should succeeds");
+}
+
+#[test]
+fn withdraw_over_the_limit_fails() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    let max_withdraw = 2 * ONE_SOL;
+    initialize_vault(&mut svm, &user, max_withdraw);
+
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 5 * ONE_SOL)],
+        &[],
+    )
+    .expect("user deposit should succeed");
+
+    let res = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), max_withdraw + 1)],
+        &[],
+    );
+    assert!(res.is_err(), "one lamport over the limit must be rejected");
+}
