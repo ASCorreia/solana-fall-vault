@@ -1,7 +1,6 @@
 use anchor_lang::prelude::*;
-
 use crate::{VAULT_SEED, VAULT_STATE_SEED, VaultState};
-
+use crate::error::ErrorCode;
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
      #[account(mut)]
@@ -27,6 +26,7 @@ pub fn withdraw_lamports(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
         from: ctx.accounts.vault.to_account_info(),
         to: ctx.accounts.user.to_account_info(),
     };
+    require!(amount <= ctx.accounts.vault_state.max_withdraw, ErrorCode::ExceedsMaxWithdraw);
 
     let signer_seeds = &[
         VAULT_SEED,
