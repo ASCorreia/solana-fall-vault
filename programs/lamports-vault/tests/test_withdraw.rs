@@ -130,3 +130,29 @@ fn withdraw_with_wrong_user_fails() {
         "an attacker without an initialized vault must not be able to withdraw"
     );
 }
+
+#[test]
+fn withdraw_exactly_at_limit_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    send(&mut svm, &user, &[common::build_initialize_ix(&user.pubkey(), 2 * ONE_SOL)], &[]).expect("initialize should succeed");
+    send(&mut svm, &user, &[build_deposit_ix(&user.pubkey(), 3 * ONE_SOL)], &[]).expect("deposit should succeed");
+    send(&mut svm, &user, &[build_withdraw_ix(&user.pubkey(), 2 * ONE_SOL)], &[]).expect("withdrawing exactly the limit should succeed");
+}
+
+#[test]
+fn withdraw_one_lamport_over_limit_fails() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    send(&mut svm, &user, &[common::build_initialize_ix(&user.pubkey(), 2 * ONE_SOL)], &[]).expect("initialize should succeed");
+    send(&mut svm, &user, &[build_deposit_ix(&user.pubkey(), 3 * ONE_SOL)], &[]).expect("deposit should succeed");
+
+    assert!(
+        send(&mut svm, &user, &[build_withdraw_ix(&user.pubkey(), 2 * ONE_SOL + 1)], &[]).is_err(),
+        "withdrawing one lamport over the limit must fail"
+    );
+}
