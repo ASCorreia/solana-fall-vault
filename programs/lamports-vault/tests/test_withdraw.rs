@@ -160,3 +160,26 @@ fn withdraw_more_than_vault_max_limit_fails() {
     );
 }
 
+#[test]
+fn withdraw_0_from_vault__fails() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    // Max withdraw limit.
+    let withdraw_limit = 500 * ONE_SOL;
+    initialize_vault(&mut svm, &user, withdraw_limit);
+
+    // Withdrawing 0 from the vault should fail.
+    let res = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), 0 * ONE_SOL)],
+        &[],
+    );
+    assert!(
+        res.is_err(),
+        "Withdrawing 0 from the vault should fail"
+    );
+}
+
