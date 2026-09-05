@@ -140,6 +140,7 @@ fn withdraw_exactly_max_withdraw_succeeds() {
     initialize_vault(&mut svm, &user);
 
     // Deposit first so the vault has withdrawable lamports.
+    let max_withdraw = 100 * ONE_SOL;
     let deposit_amount = 100 * ONE_SOL;
     send(
         &mut svm,
@@ -153,7 +154,7 @@ fn withdraw_exactly_max_withdraw_succeeds() {
     send(
         &mut svm,
         &user,
-        &[build_withdraw_ix(&user.pubkey(), 100 * ONE_SOL)],
+        &[build_withdraw_ix(&user.pubkey(), max_withdraw)],
         &[],
     )
     .expect("withdrawing exactly max_withdraw should succeed");
