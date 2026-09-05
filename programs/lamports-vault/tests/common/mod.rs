@@ -46,7 +46,10 @@ pub fn build_initialize_ix(payer: &Pubkey) -> Instruction {
 
     Instruction::new_with_bytes(
         lamports_vault::id(),
-        &lamports_vault::instruction::Initialize {}.data(),
+        &lamports_vault::instruction::Initialize {
+            max_withdraw: 100 * ONE_SOL,
+        }
+        .data(),
         lamports_vault::accounts::Initialize {
             user: *payer,
             vault_state,
