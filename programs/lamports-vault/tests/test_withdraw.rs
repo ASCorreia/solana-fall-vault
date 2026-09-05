@@ -130,3 +130,65 @@ fn withdraw_with_wrong_user_fails() {
         "an attacker without an initialized vault must not be able to withdraw"
     );
 }
+#[test]
+
+fn withdraw_under_max_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    initialize_vault(&mut svm, &user, 2 * ONE_SOL);
+
+    send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), 5 * ONE_SOL)],
+        &[],
+    )
+    .expect("owner deposit should succeed");
+
+    assert!(res.is_err(), "withdraw under max withdraw should succeed");
+}
+
+#[test]
+fn withdraw_exact_max_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    initialize_vault(&mut svm, &user, 2 * ONE_SOL);
+
+    send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), 5 * ONE_SOL)],
+        &[],
+    )
+    .expect("withdraw should succeed");
+
+    let res = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), 2 * ONE_SOL)],
+        &[], 
+    );
+    assert!(res.is_err(), "withdraw at exact max should succeed");
+}
+
+#[test]
+
+fn withdraw_over_max_fails() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    initialize_vault(&mut svm, &user, 5 * ONE_SOL);
+
+    let res = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), 2 * ONE_SOL + 1)],
+        &[],
+    );
+    assert!(res.is_err(), "withdraw over max withdraw fails");
+}
