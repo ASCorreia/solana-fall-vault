@@ -1,24 +1,24 @@
+use crate::error::ErrorCode;
 use anchor_lang::prelude::*;
 
-use crate::{VAULT_SEED, VAULT_STATE_SEED, VaultState};
+use crate::{VaultState, VAULT_SEED, VAULT_STATE_SEED};
 
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
-     #[account(mut)]
+    #[account(mut)]
     pub user: Signer<'info>,
     #[account(
-        mut, 
-        seeds = [VAULT_SEED, user.key().as_ref()], 
+        mut,
+        seeds = [VAULT_SEED, user.key().as_ref()],
         bump = vault_state.vault_bump
     )]
     pub vault: SystemAccount<'info>,
     #[account(
-        seeds = [VAULT_STATE_SEED, user.key().as_ref()], 
+        seeds = [VAULT_STATE_SEED, user.key().as_ref()],
         bump = vault_state.bump
     )]
     pub vault_state: Account<'info, VaultState>,
     pub system_program: Program<'info, System>,
-
 }
 
 pub fn withdraw_lamports(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
@@ -34,11 +34,14 @@ pub fn withdraw_lamports(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
         &[ctx.accounts.vault_state.vault_bump],
     ];
     let binding = [&signer_seeds[..]];
-    let cpi_ctx = CpiContext::new_with_signer(
-        ctx.accounts.system_program.key(),
-        cpi_accounts,
-        &binding,
+    let cpi_ctx =
+        CpiContext::new_with_signer(ctx.accounts.system_program.key(), cpi_accounts, &binding);
+
+    require!(
+        ctx.accounts.vault_state.max_withdraw >= amount,
+        ErrorCode::ExceedsMaxWithdraw
     );
+
     anchor_lang::system_program::transfer(cpi_ctx, amount)?;
     msg!("Withdrawn {} lamports from vault", amount);
 
