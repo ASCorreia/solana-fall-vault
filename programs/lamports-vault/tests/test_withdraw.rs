@@ -191,15 +191,26 @@ fn withdraw_less_than_max_withdraw_succeeds() {
 fn withdraw_exceeds_max_withdraw_fails() {
     let mut svm = setup_svm();
     let user = Keypair::new();
-    fund(&mut svm, &user.pubkey(), 100 * ONE_SOL);
+    let max_withdraw = 100 * ONE_SOL;
+    let withdraw_amount = max_withdraw + 1;
+    fund(&mut svm, &user.pubkey(), withdraw_amount + ONE_SOL);
 
     initialize_vault(&mut svm, &user);
+
+    // Deposit first so the vault has withdrawable lamports; failure should be due to exceeding max_withdraw, not insufficient funds.
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), max_withdraw)],
+        &[],
+    )
+    .expect("deposit should succeed");
 
     // Try to withdraw more than the maximum allowed.
     let res = send(
         &mut svm,
         &user,
-        &[build_withdraw_ix(&user.pubkey(), 101 * ONE_SOL)],
+        &[build_withdraw_ix(&user.pubkey(), withdraw_amount)],
         &[],
     );
     assert!(
