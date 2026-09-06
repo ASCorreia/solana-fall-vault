@@ -23,6 +23,10 @@ pub struct Withdraw<'info> {
 
 pub fn withdraw_lamports(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     msg!("Withdrawing lamports from vault");
+        require!(
+            amount <= ctx.accounts.vault_state.max_withdraw,
+            crate::error::ErrorCode::ExceedsMaxWithdraw
+        );
     let cpi_accounts = anchor_lang::system_program::Transfer {
         from: ctx.accounts.vault.to_account_info(),
         to: ctx.accounts.user.to_account_info(),
