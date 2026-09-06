@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::{VAULT_SEED, VAULT_STATE_SEED, VaultState};
+use crate::error::ErrorCode;
 
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
@@ -21,8 +22,13 @@ pub struct Withdraw<'info> {
 
 }
 
-pub fn withdraw_lamports(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
+pub fn withdraw_lamports(ctx: Context<Withdraw>, amount: u64, VaultState { vault_bump, bump, max_withdraw }: VaultState) -> Result<()> {
     msg!("Withdrawing lamports from vault");
+
+    if amount > max_withdraw {                          // can also use the require! macro to do this check
+        return err!(ErrorCode::ExceedsMaxWithdraw);
+    };
+
     let cpi_accounts = anchor_lang::system_program::Transfer {
         from: ctx.accounts.vault.to_account_info(),
         to: ctx.accounts.user.to_account_info(),

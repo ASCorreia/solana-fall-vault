@@ -37,9 +37,12 @@ pub fn initialize_vault(ctx: Context<Initialize>) -> Result<()> {
 
     anchor_lang::system_program::transfer(cpi_ctx, rent)?;
 
+    let max = 32;
+
     ctx.accounts.vault_state.set_inner(VaultState {
         vault_bump: ctx.bumps.vault, 
-        bump: ctx.bumps.vault_state
+        bump: ctx.bumps.vault_state,
+        max_withdraw: max,
     });
     
     Ok(())
