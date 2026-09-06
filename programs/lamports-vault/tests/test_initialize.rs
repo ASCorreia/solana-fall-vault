@@ -17,7 +17,8 @@ fn initialize_creates_vault_state_and_funds_vault() {
     let (vault_state, expected_state_bump) = vault_state_pda(&payer.pubkey());
     let (vault, expected_vault_bump) = vault_pda(&payer.pubkey());
 
-    let ix = build_initialize_ix(&payer.pubkey());
+    let max_withdraw = 100 * ONE_SOL;
+    let ix = build_initialize_ix(&payer.pubkey(), max_withdraw);
     send(&mut svm, &payer, &[ix], &[]).expect("initialize should succeed");
 
     let state_account = svm
@@ -28,10 +29,16 @@ fn initialize_creates_vault_state_and_funds_vault() {
 
     // Bytes 0..8 are the Anchor discriminator; bytes 8 and 9 hold the bumps in
     // VaultState field order: `vault_bump` (byte 8) then `bump` (byte 9).
+    // Bytes 10..18 hold `max_withdraw` as a little-endian u64.
     let data = &state_account.data;
-    assert!(data.len() >= 10, "vault_state account too small");
+    assert!(data.len() >= 18, "vault_state account too small");
     assert_eq!(data[8], expected_vault_bump, "vault_bump mismatch");
     assert_eq!(data[9], expected_state_bump, "state_bump mismatch");
+    assert_eq!(
+        u64::from_le_bytes(data[10..18].try_into().unwrap()),
+        max_withdraw,
+        "max_withdraw mismatch"
+    );
 
     let vault_balance = svm.get_balance(&vault).unwrap_or_default();
     assert!(
@@ -46,7 +53,7 @@ fn initialize_twice_for_same_payer_fails() {
     let payer = Keypair::new();
     fund(&mut svm, &payer.pubkey(), 10 * ONE_SOL);
 
-    let ix = build_initialize_ix(&payer.pubkey());
+    let ix = build_initialize_ix(&payer.pubkey(), 100 * ONE_SOL);
     send(&mut svm, &payer, &[ix.clone()], &[]).expect("first initialize should succeed");
 
     // Re-initializing with the same payer reuses the same PDAs and must fail
@@ -66,9 +73,9 @@ fn initialize_with_separate_payers_creates_independent_vaults() {
     fund(&mut svm, &alice.pubkey(), 10 * ONE_SOL);
     fund(&mut svm, &bob.pubkey(), 10 * ONE_SOL);
 
-    send(&mut svm, &alice, &[build_initialize_ix(&alice.pubkey())], &[])
+    send(&mut svm, &alice, &[build_initialize_ix(&alice.pubkey(), 100 * ONE_SOL)], &[])
         .expect("alice init should succeed");
-    send(&mut svm, &bob, &[build_initialize_ix(&bob.pubkey())], &[])
+    send(&mut svm, &bob, &[build_initialize_ix(&bob.pubkey(), 100 * ONE_SOL)], &[])
         .expect("bob init should succeed");
 
     let (alice_vault, _) = vault_pda(&alice.pubkey());
