@@ -4,7 +4,7 @@ use crate::{VAULT_SEED, VAULT_STATE_SEED, VaultState};
 
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
-     #[account(mut)]
+    #[account(mut)]
     pub user: Signer<'info>,
     #[account(
         mut, 
@@ -18,11 +18,14 @@ pub struct Withdraw<'info> {
     )]
     pub vault_state: Account<'info, VaultState>,
     pub system_program: Program<'info, System>,
-
 }
 
 pub fn withdraw_lamports(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     msg!("Withdrawing lamports from vault");
+    
+    // Enforce the cap before any lamports move
+    require!(amount <= ctx.accounts.vault_state.max_withdraw, crate::error::ErrorCode::ExceedsMaxWithdraw);
+
     let cpi_accounts = anchor_lang::system_program::Transfer {
         from: ctx.accounts.vault.to_account_info(),
         to: ctx.accounts.user.to_account_info(),
