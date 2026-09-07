@@ -2,8 +2,8 @@ mod common;
 
 use {
     common::{
-        build_deposit_ix, build_withdraw_ix, fund, initialize_vault, send, setup_svm, vault_pda,
-        ONE_SOL,
+        build_deposit_ix, build_initialize_ix, build_withdraw_ix, fund, initialize_vault, send,
+        setup_svm, vault_pda, ONE_SOL,
     },
     solana_keypair::Keypair,
     solana_signer::Signer,
@@ -67,11 +67,13 @@ fn withdraw_more_than_vault_holds_fails() {
 
     initialize_vault(&mut svm, &user);
 
-    // Try to withdraw far more than what the vault was seeded with at init.
+    // Far more than the rent the vault was seeded with at init, but still
+    // under the withdraw cap, so this fails on the balance rather than
+    // on the withdraw limit.
     let res = send(
         &mut svm,
         &user,
-        &[build_withdraw_ix(&user.pubkey(), 100 * ONE_SOL)],
+        &[build_withdraw_ix(&user.pubkey(), 5 * ONE_SOL)],
         &[],
     );
     assert!(
@@ -128,5 +130,126 @@ fn withdraw_with_wrong_user_fails() {
     assert!(
         res.is_err(),
         "an attacker without an initialized vault must not be able to withdraw"
+    );
+}
+
+// Sets up a vault whose per-withdraw cap is `cap` and funds it well past
+// that cap, so the limit is the only thing a withdraw can trip over.
+fn setup_capped_vault(cap: u64) -> (litesvm::LiteSVM, Keypair) {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    send(
+        &mut svm,
+        &user,
+        &[build_initialize_ix(&user.pubkey(), cap)],
+        &[],
+    )
+    .expect("initialize should succeed");
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 5 * ONE_SOL)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    (svm, user)
+}
+
+#[test]
+fn withdraw_below_the_cap_succeeds() {
+    let (mut svm, user) = setup_capped_vault(ONE_SOL);
+
+    send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), ONE_SOL / 4)],
+        &[],
+    )
+    .expect("withdrawing less than the cap should succeed");
+}
+
+#[test]
+fn withdraw_exactly_the_cap_succeeds() {
+    let (mut svm, user) = setup_capped_vault(ONE_SOL);
+
+    // The check is inclusive, so hitting the cap exactly is still allowed.
+    send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), ONE_SOL)],
+        &[],
+    )
+    .expect("withdrawing exactly the cap should succeed");
+}
+
+#[test]
+fn withdraw_above_the_cap_fails() {
+    let (mut svm, user) = setup_capped_vault(ONE_SOL);
+    let (vault, _) = vault_pda(&user.pubkey());
+    let before = svm.get_balance(&vault).unwrap_or_default();
+
+    let err = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), ONE_SOL + 1)],
+        &[],
+    )
+    .expect_err("withdrawing over the cap must fail");
+
+    let msg = format!("{err:?}");
+    assert!(
+        msg.contains("MaxWithdrawExceeded") || msg.contains("over the vault withdraw limit"),
+        "expected MaxWithdrawExceeded, got {msg}"
+    );
+    assert_eq!(
+        svm.get_balance(&vault).unwrap_or_default(),
+        before,
+        "a rejected withdraw must leave the vault untouched"
+    );
+}
+
+#[test]
+fn cap_is_enforced_per_instruction_not_per_transaction() {
+    let (mut svm, user) = setup_capped_vault(ONE_SOL);
+    let (vault, _) = vault_pda(&user.pubkey());
+    let before = svm.get_balance(&vault).unwrap_or_default();
+
+    // Two withdraws of the full cap inside a single transaction both go
+    // through: the check runs per instruction, so the cap does not bound what
+    // one transaction can move in total.
+    send(
+        &mut svm,
+        &user,
+        &[
+            build_withdraw_ix(&user.pubkey(), ONE_SOL),
+            build_withdraw_ix(&user.pubkey(), ONE_SOL),
+        ],
+        &[],
+    )
+    .expect("two at-cap withdraws in one transaction should succeed");
+
+    assert_eq!(
+        before - svm.get_balance(&vault).unwrap_or_default(),
+        2 * ONE_SOL,
+        "both withdraws should have moved the full cap"
+    );
+}
+
+#[test]
+fn zero_cap_blocks_every_withdraw() {
+    let (mut svm, user) = setup_capped_vault(0);
+
+    let res = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), 1)],
+        &[],
+    );
+    assert!(
+        res.is_err(),
+        "a vault initialized with max_withdraw = 0 must reject any withdraw"
     );
 }

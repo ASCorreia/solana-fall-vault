@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::{VAULT_SEED, VAULT_STATE_SEED, VaultState};
+use crate::{error::ErrorCode, VAULT_SEED, VAULT_STATE_SEED, VaultState};
 
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
@@ -23,6 +23,16 @@ pub struct Withdraw<'info> {
 
 pub fn withdraw_lamports(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     msg!("Withdrawing lamports from vault");
+
+    // The cap bounds one withdraw instruction. It is not a lifetime allowance,
+    // and it does not bound a whole transaction: a caller is free to pack
+    // several withdraw instructions into one transaction and move the cap each
+    // time. Limiting that would need instruction introspection.
+    require!(
+        amount <= ctx.accounts.vault_state.max_withdraw,
+        ErrorCode::MaxWithdrawExceeded
+    );
+
     let cpi_accounts = anchor_lang::system_program::Transfer {
         from: ctx.accounts.vault.to_account_info(),
         to: ctx.accounts.user.to_account_info(),
