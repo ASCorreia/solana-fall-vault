@@ -40,13 +40,13 @@ pub fn vault_pda(user: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[VAULT_SEED, user.as_ref()], &lamports_vault::id())
 }
 
-pub fn build_initialize_ix(payer: &Pubkey) -> Instruction {
+pub fn build_initialize_ix(payer: &Pubkey, max_withdraw: u64) -> Instruction {
     let (vault_state, _) = vault_state_pda(payer);
     let (vault, _) = vault_pda(payer);
 
     Instruction::new_with_bytes(
         lamports_vault::id(),
-        &lamports_vault::instruction::Initialize {}.data(),
+        &lamports_vault::instruction::Initialize { max_withdraw }.data(),
         lamports_vault::accounts::Initialize {
             user: *payer,
             vault_state,
@@ -108,7 +108,7 @@ pub fn send(
     svm.send_transaction(tx)
 }
 
-pub fn initialize_vault(svm: &mut LiteSVM, payer: &Keypair) {
-    let ix = build_initialize_ix(&payer.pubkey());
+pub fn initialize_vault(svm: &mut LiteSVM, payer: &Keypair, max_withdraw: u64) {
+    let ix = build_initialize_ix(&payer.pubkey(), max_withdraw);
     send(svm, payer, &[ix], &[]).expect("initialize should succeed");
 }
