@@ -39,7 +39,7 @@ pub fn initialize_vault(ctx: Context<Initialize>, max_withdraw: u64) -> Result<(
 
     ctx.accounts.vault_state.set_inner(VaultState {
         vault_bump: ctx.bumps.vault, 
-        bump: ctx.bumps.vault_state
+        bump: ctx.bumps.vault_state,
         max_withdraw
     });
     
