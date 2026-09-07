@@ -187,7 +187,10 @@ fn withdraw_exact_withdraw_limits_succeds() {
         &[],
     );
 
-    assert!(res.is_ok(), "withdrawal under max_withdraw should succeed");
+    assert!(
+        res.is_ok(),
+        "withdrawal at exact max_withdraw should succeed"
+    );
 }
 #[test]
 fn withdraw_over_withdraw_limits_fails() {
@@ -213,5 +216,5 @@ fn withdraw_over_withdraw_limits_fails() {
         &[],
     );
 
-    assert!(res.is_err(), "withdrawal under max_withdraw should succeed");
+    assert!(res.is_err(), "withdrawal over max_withdraw should fail");
 }
