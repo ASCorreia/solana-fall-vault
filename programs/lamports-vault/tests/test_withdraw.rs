@@ -68,7 +68,7 @@ fn withdraw_more_than_vault_holds_fails() {
     initialize_vault(&mut svm, &user);
 
     // Far more than the rent the vault was seeded with at init, but still
-    // under the per-transaction cap, so this fails on the balance rather than
+    // under the withdraw cap, so this fails on the balance rather than
     // on the withdraw limit.
     let res = send(
         &mut svm,
@@ -133,7 +133,7 @@ fn withdraw_with_wrong_user_fails() {
     );
 }
 
-// Sets up a vault whose per-transaction cap is `cap` and funds it well past
+// Sets up a vault whose per-withdraw cap is `cap` and funds it well past
 // that cap, so the limit is the only thing a withdraw can trip over.
 fn setup_capped_vault(cap: u64) -> (litesvm::LiteSVM, Keypair) {
     let mut svm = setup_svm();
@@ -201,7 +201,7 @@ fn withdraw_above_the_cap_fails() {
 
     let msg = format!("{err:?}");
     assert!(
-        msg.contains("MaxWithdrawExceeded") || msg.contains("over the per-transaction"),
+        msg.contains("MaxWithdrawExceeded") || msg.contains("over the vault withdraw limit"),
         "expected MaxWithdrawExceeded, got {msg}"
     );
     assert_eq!(
@@ -212,20 +212,30 @@ fn withdraw_above_the_cap_fails() {
 }
 
 #[test]
-fn cap_applies_per_transaction_not_in_total() {
+fn cap_is_enforced_per_instruction_not_per_transaction() {
     let (mut svm, user) = setup_capped_vault(ONE_SOL);
+    let (vault, _) = vault_pda(&user.pubkey());
+    let before = svm.get_balance(&vault).unwrap_or_default();
 
-    // Two withdraws of the full cap are fine: nothing accumulates across
-    // instructions.
-    for _ in 0..2 {
-        send(
-            &mut svm,
-            &user,
-            &[build_withdraw_ix(&user.pubkey(), ONE_SOL)],
-            &[],
-        )
-        .expect("each withdraw within the cap should succeed");
-    }
+    // Two withdraws of the full cap inside a single transaction both go
+    // through: the check runs per instruction, so the cap does not bound what
+    // one transaction can move in total.
+    send(
+        &mut svm,
+        &user,
+        &[
+            build_withdraw_ix(&user.pubkey(), ONE_SOL),
+            build_withdraw_ix(&user.pubkey(), ONE_SOL),
+        ],
+        &[],
+    )
+    .expect("two at-cap withdraws in one transaction should succeed");
+
+    assert_eq!(
+        before - svm.get_balance(&vault).unwrap_or_default(),
+        2 * ONE_SOL,
+        "both withdraws should have moved the full cap"
+    );
 }
 
 #[test]
