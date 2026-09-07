@@ -2,7 +2,7 @@ mod common;
 
 use {
     common::{
-        build_deposit_ix, build_withdraw_ix, fund, initialize_vault, send, setup_svm, vault_pda,
+        build_deposit_ix, build_initialize_ix_with_cap, build_withdraw_ix, fund, initialize_vault, send, setup_svm, vault_pda,
         ONE_SOL,
     },
     solana_keypair::Keypair,
@@ -57,7 +57,7 @@ fn withdraw_returns_lamports_to_user() {
         user_after - user_before <= withdraw_amount,
         "user net gain cannot exceed the withdrawn amount (fees)"
     );
-}
+} 
 
 #[test]
 fn withdraw_more_than_vault_holds_fails() {
@@ -129,4 +129,52 @@ fn withdraw_with_wrong_user_fails() {
         res.is_err(),
         "an attacker without an initialized vault must not be able to withdraw"
     );
+}
+#[test]
+fn withdraw_enforces_configured_cap() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    let cap = 2 * ONE_SOL;
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+    send(
+        &mut svm,
+        &user,
+        &[build_initialize_ix_with_cap(&user.pubkey(), cap)],
+        &[],
+    )
+    .expect("initialize with cap should succeed");
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 3 * ONE_SOL)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    let (vault, _) = vault_pda(&user.pubkey());
+    let balance_before = svm.get_balance(&vault).unwrap();
+    let error = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), cap + 1)],
+        &[],
+    )
+    .expect_err("withdraw above cap must fail even with sufficient funds");
+    assert_eq!(
+        error.err,
+        solana_transaction::TransactionError::InstructionError(
+            0,
+            solana_transaction::InstructionError::Custom(6000),
+        ),
+    );
+    assert_eq!(svm.get_balance(&vault).unwrap(), balance_before);
+
+    send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), cap)],
+        &[],
+    )
+    .expect("withdraw exactly at cap should succeed");
+    assert_eq!(svm.get_balance(&vault).unwrap(), balance_before - cap);
 }
