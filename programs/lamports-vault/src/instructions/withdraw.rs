@@ -18,7 +18,6 @@ pub struct Withdraw<'info> {
     )]
     pub vault_state: Account<'info, VaultState>,
     pub system_program: Program<'info, System>,
-
 }
 
 pub fn withdraw_lamports(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
@@ -27,7 +26,8 @@ pub fn withdraw_lamports(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
         from: ctx.accounts.vault.to_account_info(),
         to: ctx.accounts.user.to_account_info(),
     };
-
+    use crate::error::ErrorCode;
+    require!(amount <= ctx.accounts.vault_state.max_withdraw, ErrorCode::CustomError);
     let signer_seeds = &[
         VAULT_SEED,
         &ctx.accounts.user.key().to_bytes(),
