@@ -3,7 +3,7 @@ mod common;
 use {
     common::{
         build_deposit_ix, build_withdraw_ix, fund, initialize_vault, send, setup_svm, vault_pda,
-        ONE_SOL,
+        ONE_SOL, MAX_WITHDRAW,
     },
     solana_keypair::Keypair,
     solana_signer::Signer,
@@ -78,6 +78,22 @@ fn withdraw_more_than_vault_holds_fails() {
         res.is_err(),
         "withdrawing more than the vault holds must fail"
     );
+}
+
+#[test]
+fn withdraw_more_than_max_withdraw_fails() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), MAX_WITHDRAW);
+    initialize_vault(&mut svm, &user);
+    
+    let res = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), MAX_WITHDRAW + ONE_SOL)],
+        &[],
+    );
+    assert!(res.is_err(), "withdrawing more than the max withdraw amount must fail");
 }
 
 #[test]
