@@ -12,3 +12,7 @@ codegen-units = 1
 opt-level = 3
 incremental = false
 codegen-units = 1
+
+[workspace.lints.clippy]
+arithmetic_side_effects = "allow"
+integer_arithmetic = "allow"

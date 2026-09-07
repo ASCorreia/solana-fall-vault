@@ -22,10 +22,10 @@ pub struct Withdraw<'info> {
 
 }
 
-pub fn withdraw_lamports(ctx: Context<Withdraw>, amount: u64, VaultState { vault_bump, bump, max_withdraw }: VaultState) -> Result<()> {
+pub fn withdraw_lamports(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     msg!("Withdrawing lamports from vault");
 
-    if amount > max_withdraw {                          // can also use the require! macro to do this check
+    if amount > ctx.accounts.vault_state.max_withdraw {                          // can also use the require! macro to do this check
         return err!(ErrorCode::ExceedsMaxWithdraw);
     };
 

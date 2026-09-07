@@ -33,3 +33,8 @@ solana-keypair = "3.0.1"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
+
+
+[lints.clippy]
+arithmetic_side_effects = "allow"
+integer_arithmetic = "allow"
