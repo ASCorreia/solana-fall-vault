@@ -15,10 +15,10 @@ fn withdraw_returns_lamports_to_user() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, 4 * ONE_SOL);
 
     // Deposit first so the vault has withdrawable lamports.
-    let deposit_amount = 3 * ONE_SOL;
+    let deposit_amount = 5 * ONE_SOL;
     send(
         &mut svm,
         &user,
@@ -65,13 +65,13 @@ fn withdraw_more_than_vault_holds_fails() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, 1 * ONE_SOL);
 
     // Try to withdraw far more than what the vault was seeded with at init.
     let res = send(
         &mut svm,
         &user,
-        &[build_withdraw_ix(&user.pubkey(), 100 * ONE_SOL)],
+        &[build_withdraw_ix(&user.pubkey(), 10 * ONE_SOL)],
         &[],
     );
     assert!(
@@ -106,7 +106,7 @@ fn withdraw_with_wrong_user_fails() {
     fund(&mut svm, &owner.pubkey(), 10 * ONE_SOL);
     fund(&mut svm, &attacker.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &owner);
+    initialize_vault(&mut svm, &owner, 10 * ONE_SOL);
     send(
         &mut svm,
         &owner,
@@ -129,4 +129,79 @@ fn withdraw_with_wrong_user_fails() {
         res.is_err(),
         "an attacker without an initialized vault must not be able to withdraw"
     );
+}
+
+#[test]
+fn valid_withdraw() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+    let max = 3*ONE_SOL;
+    initialize_vault(&mut svm, &user, max);
+
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 4 * ONE_SOL)],
+        &[],
+    )
+    .expect("Deposit should succeed");
+
+    let user_fund_before = svm.get_balance(&user.pubkey()).unwrap_or_default();
+
+    send(&mut svm, &user, &[build_withdraw_ix(&user.pubkey(), max - 1)], &[]).expect("Withdraw should succeed");
+
+    let user_fund_later = svm.get_balance(&user.pubkey()).unwrap_or_default();
+
+    assert!(user_fund_later-user_fund_before<=max,"Withdraw was successful");
+
+}
+
+#[test]
+fn withdraw_at_limit() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+    let max = 3*ONE_SOL;
+    initialize_vault(&mut svm, &user, max);
+
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 4 * ONE_SOL)],
+        &[],
+    )
+    .expect("Deposit should succeed");
+
+    let user_fund_before = svm.get_balance(&user.pubkey()).unwrap_or_default();
+
+    send(&mut svm, &user, &[build_withdraw_ix(&user.pubkey(), max)], &[]).expect("Withdraw should succeed");
+
+    let user_fund_later = svm.get_balance(&user.pubkey()).unwrap_or_default();
+
+    assert!(user_fund_later-user_fund_before<=max,"Withdraw was successful");
+
+}
+
+#[test]
+fn withdraw_just_above() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+    let max = 3*ONE_SOL;
+    initialize_vault(&mut svm, &user, max);
+
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 4 * ONE_SOL)],
+        &[],
+    )
+    .expect("Deposit should succeed");
+
+    let res = send(&mut svm, &user, &[build_withdraw_ix(&user.pubkey(), max + 1)], &[]);
+
+
+    assert!( res.is_err(),"Withdraw is over the limit");
+
 }
