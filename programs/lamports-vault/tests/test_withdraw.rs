@@ -67,11 +67,13 @@ fn withdraw_more_than_vault_holds_fails() {
 
     initialize_vault(&mut svm, &user);
 
-    // Try to withdraw far more than what the vault was seeded with at init.
+    // Far more than the rent the vault was seeded with at init, but still
+    // under the per-transaction cap, so this fails on the balance rather than
+    // on the withdraw limit.
     let res = send(
         &mut svm,
         &user,
-        &[build_withdraw_ix(&user.pubkey(), 100 * ONE_SOL)],
+        &[build_withdraw_ix(&user.pubkey(), 5 * ONE_SOL)],
         &[],
     );
     assert!(
