@@ -97,6 +97,56 @@ fn withdraw_more_than_max_withdraw_fails() {
 }
 
 #[test]
+fn withdraw_less_than_max_withdraw_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    // Extra SOL covers initialize rent and transaction fees on top of the deposit.
+    fund(&mut svm, &user.pubkey(), MAX_WITHDRAW + 10 * ONE_SOL);
+    initialize_vault(&mut svm, &user);
+
+    let amount = MAX_WITHDRAW - ONE_SOL;
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), amount)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    let res = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), amount)],
+        &[],
+    );
+    assert!(res.is_ok(), "withdrawing less than the max withdraw amount must succeed");
+}
+
+#[test]
+fn withdraw_exact_max_withdraw_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), MAX_WITHDRAW + 10 * ONE_SOL);
+    initialize_vault(&mut svm, &user);
+
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), MAX_WITHDRAW)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    let res = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), MAX_WITHDRAW)],
+        &[],
+    );
+    assert!(res.is_ok(), "withdrawing exactly the max withdraw amount must succeed");
+}
+
+#[test]
 fn withdraw_without_initialize_fails() {
     let mut svm = setup_svm();
     let user = Keypair::new();
