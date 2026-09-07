@@ -2,7 +2,7 @@ mod common;
 
 use {
     common::{
-        build_deposit_ix, build_withdraw_ix, fund, initialize_vault, send, setup_svm, vault_pda,
+        build_deposit_ix, build_initialize_ix, build_withdraw_ix, fund, initialize_vault, send, setup_svm, vault_pda,
         ONE_SOL,
     },
     solana_keypair::Keypair,
@@ -128,5 +128,54 @@ fn withdraw_with_wrong_user_fails() {
     assert!(
         res.is_err(),
         "an attacker without an initialized vault must not be able to withdraw"
+    );
+}
+
+
+#[test]
+fn withdraw_under_max_withdraw_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    send(&mut svm, &user, &[build_initialize_ix(&user.pubkey(), ONE_SOL)], &[])
+        .expect("initialize should succeed");
+    send(&mut svm, &user, &[build_deposit_ix(&user.pubkey(), 3 * ONE_SOL)], &[])
+        .expect("deposit should succeed");
+    send(&mut svm, &user, &[build_withdraw_ix(&user.pubkey(), ONE_SOL / 2)], &[])
+        .expect("withdraw under cap should succeed");
+}
+
+#[test]
+fn withdraw_at_max_withdraw_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    send(&mut svm, &user, &[build_initialize_ix(&user.pubkey(), ONE_SOL)], &[])
+        .expect("initialize should succeed");
+    send(&mut svm, &user, &[build_deposit_ix(&user.pubkey(), 3 * ONE_SOL)], &[])
+        .expect("deposit should succeed");
+    send(&mut svm, &user, &[build_withdraw_ix(&user.pubkey(), ONE_SOL)], &[])
+        .expect("withdraw equal to cap should succeed");
+}
+
+#[test]
+fn withdraw_over_max_withdraw_fails() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    send(&mut svm, &user, &[build_initialize_ix(&user.pubkey(), ONE_SOL)], &[])
+        .expect("initialize should succeed");
+    send(&mut svm, &user, &[build_deposit_ix(&user.pubkey(), 3 * ONE_SOL)], &[])
+        .expect("deposit should succeed");
+
+    let err = send(&mut svm, &user, &[build_withdraw_ix(&user.pubkey(), ONE_SOL + 1)], &[])
+        .expect_err("withdraw over cap should fail");
+    let msg = format!("{:?}", err);
+    assert!(
+        msg.contains("ExceedsMaxWithdraw") || msg.contains("exceeds the vault max_withdraw"),
+        "expected ExceedsMaxWithdraw, got {msg}"
     );
 }
