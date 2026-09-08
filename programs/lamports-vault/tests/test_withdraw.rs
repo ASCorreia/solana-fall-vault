@@ -15,7 +15,7 @@ fn withdraw_returns_lamports_to_user() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, 100 * ONE_SOL);
 
     // Deposit first so the vault has withdrawable lamports.
     let deposit_amount = 3 * ONE_SOL;
@@ -65,7 +65,7 @@ fn withdraw_more_than_vault_holds_fails() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, 100 * ONE_SOL);
 
     // Try to withdraw far more than what the vault was seeded with at init.
     let res = send(
@@ -106,7 +106,7 @@ fn withdraw_with_wrong_user_fails() {
     fund(&mut svm, &owner.pubkey(), 10 * ONE_SOL);
     fund(&mut svm, &attacker.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &owner);
+    initialize_vault(&mut svm, &owner, 100 * ONE_SOL);
     send(
         &mut svm,
         &owner,
@@ -128,5 +128,89 @@ fn withdraw_with_wrong_user_fails() {
     assert!(
         res.is_err(),
         "an attacker without an initialized vault must not be able to withdraw"
+    );
+}
+
+#[test]
+fn withdraw_up_to_cap_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    let max_withdraw = 2 * ONE_SOL;
+    initialize_vault(&mut svm, &user, max_withdraw);
+
+    // Deposit more than the cap so the vault can actually cover a
+    // withdrawal at the cap. A rejection here should only ever be
+    // about the cap, never about insufficient vault funds.
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 5 * ONE_SOL)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    // Under the cap.
+    let ix = build_withdraw_ix(&user.pubkey(), max_withdraw - ONE_SOL);
+    send(&mut svm, &user, &[ix], &[]).expect("withdrawal under the cap should succeed");
+}
+
+#[test]
+fn withdraw_exactly_at_cap_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    let max_withdraw = 2 * ONE_SOL;
+    initialize_vault(&mut svm, &user, max_withdraw);
+
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 5 * ONE_SOL)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    // Exactly at the cap: amount == max_withdraw.
+    let ix = build_withdraw_ix(&user.pubkey(), max_withdraw);
+    send(&mut svm, &user, &[ix], &[])
+        .expect("withdrawal exactly at the cap should succeed");
+}
+
+#[test]
+fn withdraw_one_lamport_over_cap_fails() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    let max_withdraw = 2 * ONE_SOL;
+    initialize_vault(&mut svm, &user, max_withdraw);
+
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 5 * ONE_SOL)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    // One lamport over the cap — the smallest input that must fail,
+    // so a pass here can only mean the cap check is wrong.
+    let ix = build_withdraw_ix(&user.pubkey(), max_withdraw + 1);
+    let res = send(&mut svm, &user, &[ix], &[]);
+
+    assert!(
+        res.is_err(),
+        "withdrawing one lamport over max_withdraw must fail"
+    );
+
+    // Confirm it failed for the right reason, not some unrelated error.
+    let err = res.unwrap_err();
+    let logs = err.meta.logs.join("\n");
+    assert!(
+        logs.contains("ExceedsMaxWithdraw"),
+        "expected ExceedsMaxWithdraw in logs, got:\n{logs}"
     );
 }
