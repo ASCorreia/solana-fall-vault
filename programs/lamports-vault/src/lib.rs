@@ -9,15 +9,15 @@ pub use constants::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("9AvGuh5C8cYcYU7RwwWQU9iDFqWpjQ9MnGZ8cfbkJPLc");
+declare_id!("ENziLSaKmejrGxvA5NzXvnvLfq9dfvga65v7sVEXYXTr");
 
 #[program]
 pub mod lamports_vault {
     use super::*;
 
-    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        initialize::initialize_vault(ctx)
-    }
+    pub fn initialize(ctx: Context<Initialize>, max_withdraw: u64) -> Result<()> {
+    instructions::initialize_vault(ctx, max_withdraw)
+    } // added max_withdraw parameter to route the user's limit to the initialisation instruction
 
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         deposit::deposit_lamports(ctx, amount)

@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-
+use crate::error::ErrorCode;	// this is new
 use crate::{VAULT_SEED, VAULT_STATE_SEED, VaultState};
 
 #[derive(Accounts)]
@@ -39,6 +39,7 @@ pub fn withdraw_lamports(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
         cpi_accounts,
         &binding,
     );
+    require!(amount <= ctx.accounts.vault_state.max_withdraw, ErrorCode::ExceedsMaxWithdraw);	// this is new
     anchor_lang::system_program::transfer(cpi_ctx, amount)?;
     msg!("Withdrawn {} lamports from vault", amount);
 
