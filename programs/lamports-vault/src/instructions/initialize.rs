@@ -8,14 +8,14 @@ pub struct Initialize<'info> {
     pub user: Signer<'info>,
     #[account(
         mut,
-        seeds = [VAULT_SEED, user.key().as_ref()],
+        seeds = [VAULT_SEED, user.key().as_ref()], // const VAULT_SEED = b"vault" from constants.rs
         bump,
     )]
     pub vault: SystemAccount<'info>,
     #[account(
         init,
         payer = user,
-        space = ANCHOR_DISCRIMINATOR_LENGTH + VaultState::INIT_SPACE,
+        space = ANCHOR_DISCRIMINATOR_LENGTH + VaultState::INIT_SPACE, // const ANCHOR_DISCRIMINATOR_LENGTH = 8 from constants.rs, and discriminator is 8 bytes, so the total space is 8 + VaultState::INIT_SPACE 
         seeds = [VAULT_STATE_SEED, user.key().as_ref()],
         bump,
     )]
@@ -23,9 +23,10 @@ pub struct Initialize<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn initialize_vault(ctx: Context<Initialize>) -> Result<()> {
+pub fn initialize_vault(ctx: Context<Initialize>, max_withdraw: u64) -> Result<()> {
     msg!("Initializing vault for user: {}", ctx.accounts.user.key());
 
+    // transfer the minimum balance required for rent exemption from the user to the vault account
     let cpi_acccounts = anchor_lang::system_program::Transfer {
         from: ctx.accounts.user.to_account_info(),
         to: ctx.accounts.vault.to_account_info(),
@@ -39,7 +40,8 @@ pub fn initialize_vault(ctx: Context<Initialize>) -> Result<()> {
 
     ctx.accounts.vault_state.set_inner(VaultState {
         vault_bump: ctx.bumps.vault, 
-        bump: ctx.bumps.vault_state
+        bump: ctx.bumps.vault_state,
+        max_withdraw
     });
     
     Ok(())
