@@ -2,12 +2,12 @@ mod common;
 
 use {
     common::{
-        build_deposit_ix, build_withdraw_ix, fund, initialize_vault, send, setup_svm, vault_pda,
+        build_deposit_ix, build_initialize_ix, build_withdraw_ix, fund, initialize_vault, send, setup_svm, vault_pda,
         ONE_SOL,
     },
     solana_keypair::Keypair,
     solana_signer::Signer,
-};
+};	// updated to include build_initialize_ix (this is new)
 
 #[test]
 fn withdraw_returns_lamports_to_user() {
@@ -129,4 +129,63 @@ fn withdraw_with_wrong_user_fails() {
         res.is_err(),
         "an attacker without an initialized vault must not be able to withdraw"
     );
+}
+
+#[test]
+fn withdraw_under_cap_succeeds() {
+    let mut svm = setup_svm();
+    let payer = Keypair::new();
+    fund(&mut svm, &payer.pubkey(), 10 * ONE_SOL);
+
+    // 1. Initialize with a cap of 2 * ONE_SOL
+    let init_ix = build_initialize_ix(&payer.pubkey(), 2 * ONE_SOL);
+    send(&mut svm, &payer, &[init_ix], &[]).unwrap();
+
+    // 2. Deposit 5 * ONE_SOL (plenty of funds)
+    let dep_ix = build_deposit_ix(&payer.pubkey(), 5 * ONE_SOL);
+    send(&mut svm, &payer, &[dep_ix], &[]).unwrap();
+
+    // 3. Withdraw 1 * ONE_SOL (Under the cap)
+    let withdraw_ix = build_withdraw_ix(&payer.pubkey(), 1 * ONE_SOL);
+    let result = send(&mut svm, &payer, &[withdraw_ix], &[]);
+    
+    assert!(result.is_ok(), "Withdrawal under the cap should succeed");
+}
+
+#[test]
+fn withdraw_exactly_at_cap_succeeds() {
+    let mut svm = setup_svm();
+    let payer = Keypair::new();
+    fund(&mut svm, &payer.pubkey(), 10 * ONE_SOL);
+
+    let init_ix = build_initialize_ix(&payer.pubkey(), 2 * ONE_SOL);
+    send(&mut svm, &payer, &[init_ix], &[]).unwrap();
+
+    let dep_ix = build_deposit_ix(&payer.pubkey(), 5 * ONE_SOL);
+    send(&mut svm, &payer, &[dep_ix], &[]).unwrap();
+
+    // Withdraw exactly 2 * ONE_SOL (Right on the boundary)
+    let withdraw_ix = build_withdraw_ix(&payer.pubkey(), 2 * ONE_SOL);
+    let result = send(&mut svm, &payer, &[withdraw_ix], &[]);
+    
+    assert!(result.is_ok(), "Withdrawal exactly at the cap should succeed");
+}
+
+#[test]
+fn withdraw_over_cap_fails() {
+    let mut svm = setup_svm();
+    let payer = Keypair::new();
+    fund(&mut svm, &payer.pubkey(), 10 * ONE_SOL);
+
+    let init_ix = build_initialize_ix(&payer.pubkey(), 2 * ONE_SOL);
+    send(&mut svm, &payer, &[init_ix], &[]).unwrap();
+
+    let dep_ix = build_deposit_ix(&payer.pubkey(), 5 * ONE_SOL);
+    send(&mut svm, &payer, &[dep_ix], &[]).unwrap();
+
+    // Withdraw 2 * ONE_SOL + 1 lamport (Over the boundary)
+    let withdraw_ix = build_withdraw_ix(&payer.pubkey(), (2 * ONE_SOL) + 1);
+    let result = send(&mut svm, &payer, &[withdraw_ix], &[]);
+    
+    assert!(result.is_err(), "Withdrawal over the cap must fail");
 }
