@@ -15,7 +15,7 @@ fn withdraw_returns_lamports_to_user() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, 3 * ONE_SOL);
 
     // Deposit first so the vault has withdrawable lamports.
     let deposit_amount = 3 * ONE_SOL;
@@ -65,7 +65,7 @@ fn withdraw_more_than_vault_holds_fails() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, 110 * ONE_SOL);
 
     // Try to withdraw far more than what the vault was seeded with at init.
     let res = send(
@@ -106,7 +106,7 @@ fn withdraw_with_wrong_user_fails() {
     fund(&mut svm, &owner.pubkey(), 10 * ONE_SOL);
     fund(&mut svm, &attacker.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &owner);
+    initialize_vault(&mut svm, &owner, 5 * ONE_SOL);
     send(
         &mut svm,
         &owner,
@@ -128,5 +128,92 @@ fn withdraw_with_wrong_user_fails() {
     assert!(
         res.is_err(),
         "an attacker without an initialized vault must not be able to withdraw"
+    );
+}
+
+#[test]
+fn withdraw_below_limit_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    initialize_vault(&mut svm, &user, 6 * ONE_SOL);
+
+    send(
+    &mut svm,
+    &user,
+    &[build_deposit_ix(&user.pubkey(), 9 * ONE_SOL)],
+    &[],
+    )
+    .expect("deposit should succeed");
+    
+    // Try to withdraw less than limit
+    let res = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), 5 * ONE_SOL)],
+        &[],
+    );
+    assert!(
+        res.is_ok(),
+        "withdrawing less than limit must succeed"
+    );
+}
+
+#[test]
+fn withdraw_on_limit_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    initialize_vault(&mut svm, &user, 5 * ONE_SOL);
+
+    send(
+    &mut svm,
+    &user,
+    &[build_deposit_ix(&user.pubkey(), 9 * ONE_SOL)],
+    &[],
+    )
+    .expect("deposit should succeed");
+
+    // Try to withdraw as much as limit
+    let res = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), 5 * ONE_SOL)],
+        &[],
+    );
+    assert!(
+        res.is_ok(),
+        "withdrawing as much as limit must succeed"
+    );
+}
+
+#[test]
+fn withdraw_more_than_limit_fails() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    initialize_vault(&mut svm, &user, 5 * ONE_SOL);
+
+    send(
+    &mut svm,
+    &user,
+    &[build_deposit_ix(&user.pubkey(), 9 * ONE_SOL)],
+    &[],
+    )
+    .expect("deposit should succeed");
+
+    // Try to withdraw more than limit
+    let res = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), 7 * ONE_SOL)],
+        &[],
+    );
+    assert!(
+        res.is_err(),
+        "withdrawing more than the limit must fail"
     );
 }
