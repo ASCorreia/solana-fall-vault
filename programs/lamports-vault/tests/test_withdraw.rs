@@ -2,8 +2,8 @@ mod common;
 
 use {
     common::{
-        build_deposit_ix, build_withdraw_ix, fund, initialize_vault, send, setup_svm, vault_pda,
-        ONE_SOL,
+        build_deposit_ix, build_initialize_ix, build_withdraw_ix, fund, initialize_vault, send,
+        setup_svm, vault_pda, ONE_SOL,
     },
     solana_keypair::Keypair,
     solana_signer::Signer,
@@ -17,7 +17,6 @@ fn withdraw_returns_lamports_to_user() {
 
     initialize_vault(&mut svm, &user);
 
-    // Deposit first so the vault has withdrawable lamports.
     let deposit_amount = 3 * ONE_SOL;
     send(
         &mut svm,
@@ -48,7 +47,6 @@ fn withdraw_returns_lamports_to_user() {
         withdraw_amount,
         "vault should shrink by exactly the withdrawn amount"
     );
-    // User credit equals the withdrawn amount minus the transaction fee.
     assert!(
         user_after > user_before,
         "user balance should increase after withdraw"
@@ -60,6 +58,107 @@ fn withdraw_returns_lamports_to_user() {
 }
 
 #[test]
+fn withdraw_at_exact_max_withdraw_limit_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    let max_withdraw = 2 * ONE_SOL;
+    send(
+        &mut svm,
+        &user,
+        &[build_initialize_ix(&user.pubkey(), max_withdraw)],
+        &[],
+    )
+    .expect("initialize should succeed");
+
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 5 * ONE_SOL)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), max_withdraw)],
+        &[],
+    )
+    .expect("withdraw at exact limit should succeed");
+}
+
+#[test]
+fn withdraw_exceeds_max_withdraw_limit_fails() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    let max_withdraw = ONE_SOL;
+    send(
+        &mut svm,
+        &user,
+        &[build_initialize_ix(&user.pubkey(), max_withdraw)],
+        &[],
+    )
+    .expect("initialize should succeed");
+
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 5 * ONE_SOL)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    let res = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), max_withdraw + 1)],
+        &[],
+    );
+    assert!(
+        res.is_err(),
+        "withdraw of max_withdraw + 1 must be rejected with ExceededMaxWithdraw"
+    );
+}
+
+#[test]
+fn withdraw_with_zero_max_withdraw_always_fails() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    send(
+        &mut svm,
+        &user,
+        &[build_initialize_ix(&user.pubkey(), 0)],
+        &[],
+    )
+    .expect("initialize with zero max_withdraw should succeed");
+
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 3 * ONE_SOL)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    let res = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), 1)],
+        &[],
+    );
+    assert!(
+        res.is_err(),
+        "any withdrawal must fail when max_withdraw is 0"
+    );
+}
+
+#[test]
 fn withdraw_more_than_vault_holds_fails() {
     let mut svm = setup_svm();
     let user = Keypair::new();
@@ -67,7 +166,6 @@ fn withdraw_more_than_vault_holds_fails() {
 
     initialize_vault(&mut svm, &user);
 
-    // Try to withdraw far more than what the vault was seeded with at init.
     let res = send(
         &mut svm,
         &user,
@@ -115,10 +213,6 @@ fn withdraw_with_wrong_user_fails() {
     )
     .expect("owner deposit should succeed");
 
-    // The attacker tries to withdraw from the owner's vault by signing with
-    // their own keypair. Because the vault PDA is derived from the user's key,
-    // an attacker-built `withdraw` instruction targets a non-existent PDA and
-    // therefore cannot drain the owner's vault.
     let res = send(
         &mut svm,
         &attacker,
