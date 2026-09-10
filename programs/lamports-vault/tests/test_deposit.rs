@@ -3,6 +3,7 @@ mod common;
 use {
     common::{
         build_deposit_ix, fund, initialize_vault, send, setup_svm, vault_pda, ONE_SOL,
+        TEST_MAX_WITHDRAW,
     },
     solana_keypair::Keypair,
     solana_signer::Signer,
@@ -14,7 +15,7 @@ fn deposit_increases_vault_balance() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, TEST_MAX_WITHDRAW);
 
     let (vault, _) = vault_pda(&user.pubkey());
     let vault_before = svm.get_balance(&vault).unwrap_or_default();
@@ -45,7 +46,7 @@ fn multiple_deposits_accumulate() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, TEST_MAX_WITHDRAW);
 
     let (vault, _) = vault_pda(&user.pubkey());
     let vault_before = svm.get_balance(&vault).unwrap_or_default();
@@ -87,7 +88,7 @@ fn deposit_more_than_balance_fails() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 2 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, TEST_MAX_WITHDRAW);
 
     // Try to deposit way more than the user has.
     let ix = build_deposit_ix(&user.pubkey(), 100 * ONE_SOL);
@@ -104,7 +105,7 @@ fn deposit_zero_lamports_succeeds_and_is_a_noop() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, TEST_MAX_WITHDRAW);
 
     let (vault, _) = vault_pda(&user.pubkey());
     let vault_before = svm.get_balance(&vault).unwrap_or_default();
@@ -113,5 +114,8 @@ fn deposit_zero_lamports_succeeds_and_is_a_noop() {
     send(&mut svm, &user, &[ix], &[]).expect("zero-lamport deposit should succeed");
 
     let vault_after = svm.get_balance(&vault).unwrap_or_default();
-    assert_eq!(vault_after, vault_before, "vault balance should be unchanged");
+    assert_eq!(
+        vault_after, vault_before,
+        "vault balance should be unchanged"
+    );
 }
