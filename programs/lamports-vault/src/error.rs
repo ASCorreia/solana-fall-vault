@@ -4,4 +4,6 @@ use anchor_lang::prelude::*;
 pub enum ErrorCode {
     #[msg("Custom error message")]
     CustomError,
+    #[msg("Cannot withdraw as exceeds max withdraw amount")]
+    ExceedsMaxWithdraw,
 }
