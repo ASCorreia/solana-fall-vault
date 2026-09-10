@@ -1,5 +1,5 @@
 mod common;
-
+use litesvm::LiteSVM;
 use {
     common::{
         build_deposit_ix, build_withdraw_ix, fund, initialize_vault, send, setup_svm, vault_pda,
@@ -15,7 +15,7 @@ fn withdraw_returns_lamports_to_user() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, 100 * ONE_SOL);
 
     // Deposit first so the vault has withdrawable lamports.
     let deposit_amount = 3 * ONE_SOL;
@@ -65,7 +65,7 @@ fn withdraw_more_than_vault_holds_fails() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, 100 * ONE_SOL);
 
     // Try to withdraw far more than what the vault was seeded with at init.
     let res = send(
@@ -106,7 +106,7 @@ fn withdraw_with_wrong_user_fails() {
     fund(&mut svm, &owner.pubkey(), 10 * ONE_SOL);
     fund(&mut svm, &attacker.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &owner);
+    initialize_vault(&mut svm, &owner, 100 * ONE_SOL);
     send(
         &mut svm,
         &owner,
@@ -128,5 +128,43 @@ fn withdraw_with_wrong_user_fails() {
     assert!(
         res.is_err(),
         "an attacker without an initialized vault must not be able to withdraw"
+    );
+}
+const CAP: u64 = 2 * ONE_SOL;
+
+/// Sets up a funded user with a vault capped at CAP and 5 SOL deposited.
+fn setup_capped_vault() -> (LiteSVM, Keypair) {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+    initialize_vault(&mut svm, &user, CAP);
+    send(&mut svm, &user, &[build_deposit_ix(&user.pubkey(), 5 * ONE_SOL)], &[])
+        .expect("deposit should succeed");
+    (svm, user)
+}
+
+#[test]
+fn withdraw_under_limit_succeeds() {
+    let (mut svm, user) = setup_capped_vault();
+    send(&mut svm, &user, &[build_withdraw_ix(&user.pubkey(), ONE_SOL)], &[])
+        .expect("withdraw under the limit should succeed");
+}
+
+#[test]
+fn withdraw_exactly_at_limit_succeeds() {
+    let (mut svm, user) = setup_capped_vault();
+    send(&mut svm, &user, &[build_withdraw_ix(&user.pubkey(), CAP)], &[])
+        .expect("withdraw exactly at the limit should succeed");
+}
+
+#[test]
+fn withdraw_over_limit_fails() {
+    let (mut svm, user) = setup_capped_vault();
+    let res = send(&mut svm, &user, &[build_withdraw_ix(&user.pubkey(), CAP + 1)], &[]);
+    let err = res.expect_err("withdraw over the limit must fail");
+    assert!(
+        err.meta.logs.iter().any(|l| l.contains("ExceedsMaxWithdraw")),
+        "expected ExceedsMaxWithdraw in logs, got: {:?}",
+        err.meta.logs
     );
 }
