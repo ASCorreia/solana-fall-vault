@@ -3,7 +3,7 @@ mod common;
 use {
     common::{
         build_deposit_ix, build_withdraw_ix, fund, initialize_vault, send, setup_svm, vault_pda,
-        ONE_SOL,
+        ONE_SOL, TEST_MAX_WITHDRAW,
     },
     solana_keypair::Keypair,
     solana_signer::Signer,
@@ -15,7 +15,7 @@ fn withdraw_returns_lamports_to_user() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, TEST_MAX_WITHDRAW);
 
     // Deposit first so the vault has withdrawable lamports.
     let deposit_amount = 3 * ONE_SOL;
@@ -65,7 +65,7 @@ fn withdraw_more_than_vault_holds_fails() {
     let user = Keypair::new();
     fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &user);
+    initialize_vault(&mut svm, &user, TEST_MAX_WITHDRAW);
 
     // Try to withdraw far more than what the vault was seeded with at init.
     let res = send(
@@ -106,7 +106,7 @@ fn withdraw_with_wrong_user_fails() {
     fund(&mut svm, &owner.pubkey(), 10 * ONE_SOL);
     fund(&mut svm, &attacker.pubkey(), 10 * ONE_SOL);
 
-    initialize_vault(&mut svm, &owner);
+    initialize_vault(&mut svm, &owner, TEST_MAX_WITHDRAW);
     send(
         &mut svm,
         &owner,
@@ -128,5 +128,106 @@ fn withdraw_with_wrong_user_fails() {
     assert!(
         res.is_err(),
         "an attacker without an initialized vault must not be able to withdraw"
+    );
+}
+
+#[test]
+fn withdraw_under_max_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    let max_withdraw = 2 * ONE_SOL;
+    initialize_vault(&mut svm, &user, max_withdraw);
+
+    // Fund the vault far above the cap so that any rejection below can only
+    // come from the cap check, never from insufficient lamports.
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 5 * ONE_SOL)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), ONE_SOL)],
+        &[],
+    )
+    .expect("withdrawing under the cap should succeed");
+}
+
+#[test]
+fn withdraw_exactly_max_succeeds() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    let max_withdraw = 2 * ONE_SOL;
+    initialize_vault(&mut svm, &user, max_withdraw);
+
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 5 * ONE_SOL)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    // The cap is inclusive: `amount == max_withdraw` must be allowed through.
+    send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), max_withdraw)],
+        &[],
+    )
+    .expect("withdrawing exactly the cap should succeed");
+}
+
+#[test]
+fn withdraw_over_max_fails() {
+    let mut svm = setup_svm();
+    let user = Keypair::new();
+    fund(&mut svm, &user.pubkey(), 10 * ONE_SOL);
+
+    let max_withdraw = 2 * ONE_SOL;
+    initialize_vault(&mut svm, &user, max_withdraw);
+
+    // 5 SOL against a 2 SOL cap: the vault can easily cover `max_withdraw + 1`,
+    // so a shortfall cannot be the reason this transaction fails.
+    send(
+        &mut svm,
+        &user,
+        &[build_deposit_ix(&user.pubkey(), 5 * ONE_SOL)],
+        &[],
+    )
+    .expect("deposit should succeed");
+
+    // Exactly one lamport over the limit — the smallest possible violation,
+    // which is what makes this an off-by-one check rather than a smoke test.
+    let res = send(
+        &mut svm,
+        &user,
+        &[build_withdraw_ix(&user.pubkey(), max_withdraw + 1)],
+        &[],
+    );
+
+    assert!(
+        res.is_err(),
+        "withdrawing one lamport over the cap must be rejected"
+    );
+
+    // `is_err()` alone would also be satisfied by an unrelated failure, so pin
+    // the rejection to our own error rather than to any error at all.
+    let err = res.unwrap_err();
+    assert!(
+        err.meta
+            .logs
+            .iter()
+            .any(|l| l.contains("ExceedsMaxWithdraw")),
+        "expected ExceedsMaxWithdraw, got logs: {:?}",
+        err.meta.logs
     );
 }
