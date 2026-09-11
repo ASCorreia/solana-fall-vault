@@ -17,7 +17,7 @@ fn initialize_creates_vault_state_and_funds_vault() {
     let (vault_state, expected_state_bump) = vault_state_pda(&payer.pubkey());
     let (vault, expected_vault_bump) = vault_pda(&payer.pubkey());
 
-    let ix = build_initialize_ix(&payer.pubkey());
+    let ix = build_initialize_ix(&payer.pubkey(), 100 * ONE_SOL);
     send(&mut svm, &payer, &[ix], &[]).expect("initialize should succeed");
 
     let state_account = svm
@@ -46,7 +46,7 @@ fn initialize_twice_for_same_payer_fails() {
     let payer = Keypair::new();
     fund(&mut svm, &payer.pubkey(), 10 * ONE_SOL);
 
-    let ix = build_initialize_ix(&payer.pubkey());
+    let ix = build_initialize_ix(&payer.pubkey(), 100 * ONE_SOL);
     send(&mut svm, &payer, &[ix.clone()], &[]).expect("first initialize should succeed");
 
     // Re-initializing with the same payer reuses the same PDAs and must fail
@@ -66,9 +66,9 @@ fn initialize_with_separate_payers_creates_independent_vaults() {
     fund(&mut svm, &alice.pubkey(), 10 * ONE_SOL);
     fund(&mut svm, &bob.pubkey(), 10 * ONE_SOL);
 
-    send(&mut svm, &alice, &[build_initialize_ix(&alice.pubkey())], &[])
+    send(&mut svm, &alice, &[build_initialize_ix(&alice.pubkey(), 100 * ONE_SOL)], &[])
         .expect("alice init should succeed");
-    send(&mut svm, &bob, &[build_initialize_ix(&bob.pubkey())], &[])
+    send(&mut svm, &bob, &[build_initialize_ix(&bob.pubkey(), 100 * ONE_SOL)], &[])
         .expect("bob init should succeed");
 
     let (alice_vault, _) = vault_pda(&alice.pubkey());
