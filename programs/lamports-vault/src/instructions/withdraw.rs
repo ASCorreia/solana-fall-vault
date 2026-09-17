@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::{VAULT_SEED, VAULT_STATE_SEED, VaultState};
+use crate::{error::ErrorCode, VAULT_SEED, VAULT_STATE_SEED, VaultState};
 
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
@@ -23,6 +23,14 @@ pub struct Withdraw<'info> {
 
 pub fn withdraw_lamports(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     msg!("Withdrawing lamports from vault");
+    let rent_reserve = Rent::get()?.minimum_balance(ctx.accounts.vault.data_len());
+    let withdrawable = ctx
+        .accounts
+        .vault
+        .lamports()
+        .saturating_sub(rent_reserve);
+    require!(amount <= withdrawable, ErrorCode::InsufficientVaultFunds);
+
     let cpi_accounts = anchor_lang::system_program::Transfer {
         from: ctx.accounts.vault.to_account_info(),
         to: ctx.accounts.user.to_account_info(),

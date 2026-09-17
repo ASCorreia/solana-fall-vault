@@ -9,7 +9,7 @@ pub struct Close<'info> {
     #[account(
         mut, 
         seeds = [VAULT_SEED, user.key().as_ref()], 
-        bump
+        bump = vault_state.vault_bump
     )]
     pub vault: SystemAccount<'info>,
     #[account(
